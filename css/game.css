@@ -1,341 +1,205 @@
 /* =========================================
-   GAME: Scoreboard, Darts, Keypad, Results
+   GAME SCREEN
    ========================================= */
 
-/* Container für den aktiven Screen */
 #screen-game {
     display: flex; flex-direction: column; align-items: center;
     width: 100%; height: 100%; 
-    padding-bottom: 20px; box-sizing: border-box;
+    padding-bottom: var(--gap-lg); box-sizing: border-box;
 }
 
-/* --------------------------------------------------
-   1. HEADER & SCOREBOARD (Oben)
-   -------------------------------------------------- */
-
+/* --- HEADER --- */
 .game-header-area { 
     width: 100%; text-align: center; 
-    margin-bottom: 15px; margin-top: 10px; flex-shrink: 0; 
+    margin: var(--gap-sm) 0 var(--gap-md) 0; flex-shrink: 0; 
 }
-
 .active-player-big { 
-    font-size: 2rem; font-weight: 800; color: #e4e4e4; 
+    font-size: 2rem; font-weight: 800; color: var(--text-main); 
     margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;
     text-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
-.player-score-small { font-size: 1.4rem; color: #e4e4e4; font-weight: bold; margin-bottom: 5px; }
-.round-info-small { font-size: 1rem; color: inherit; }
+.player-score-small { font-size: 1.4rem; color: var(--text-main); font-weight: bold; margin-bottom: 5px; }
 
 #multiplayer-scoreboard {
-    display: flex; justify-content: center; gap: 10px;
-    margin-top: 15px; flex-wrap: wrap;
+    display: flex; justify-content: center; gap: var(--gap-sm); margin-top: var(--gap-md); flex-wrap: wrap;
 }
 .player-mini-card {
-    background: rgba(255,255,255,0.05); border: 1px solid #444;
+    background: var(--bg-glass); 
+    border: 1px solid var(--border-default);
     border-radius: 8px; padding: 5px 10px; min-width: 80px; text-align: center;
 }
-.mini-name { font-size: 0.75rem; color: #aaa; margin-bottom: 2px; }
-.mini-score { font-size: 1.1rem; font-weight: bold; color: #e4e4e4; }
-.mini-legs { font-size: 0.7rem; color: #666; }
+.mini-name { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 2px; }
+.mini-score { font-size: 1.1rem; font-weight: bold; color: var(--text-main); }
 
-
-/* --------------------------------------------------
-   2. TARGET BOX (Die große Zahl)
-   -------------------------------------------------- */
-
+/* --- TARGET BOX --- */
 .target-box {
-    background-color: var(--panel-color); 
-    padding: 20px; border-radius: 20px;
-    text-align: center; border: 1px solid #444; 
+    background-color: var(--bg-panel); 
+    padding: var(--gap-lg); border-radius: var(--radius-lg);
+    text-align: center; border: 1px solid var(--border-default); 
     width: 100%; max-width: 500px; 
-    min-height: 400px; margin-bottom: 20px;
+    min-height: 400px; margin-bottom: var(--gap-lg);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4); 
+    box-shadow: var(--shadow-lg); 
 }
-
-.target-row-main { margin-bottom: 10px; width: 100%; }
-.target-row-hint { min-height: 35px; width: 100%; margin-bottom: 10px; display: flex; justify-content: center; align-items: center;}
-.target-row-score { min-height: 40px; width: 100%; margin-bottom: 15px; }
-
 .target-value { 
     font-size: 8rem; color: var(--highlight-color); font-weight: bold; 
     line-height: 1; font-variant-numeric: tabular-nums;
 }
-.target-label { color: #888; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 5px; }
+.target-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 5px; }
 .checkout-hint { 
     color: var(--accent-color); font-size: 1.3rem; font-weight: bold; 
-    background: rgba(0, 210, 106, 0.1); padding: 5px 15px; border-radius: 15px; display: inline-block;
+    background: var(--accent-dim); padding: 5px 15px; border-radius: 15px; display: inline-block;
 }
-.bust-flash { color: var(--miss-color) !important; animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
 
-
-/* --------------------------------------------------
-   3. DART ANZEIGE & KEYPAD BASIS
-   -------------------------------------------------- */
+/* --- DART DISPLAY --- */
 .dart-display-row { 
-    display: flex; gap: 10px; justify-content: center; 
-    margin-top: 10px; height: 60px; width: 100%; margin-bottom: 20px;
+    display: flex; gap: var(--gap-sm); justify-content: center; 
+    margin-top: var(--gap-sm); height: 60px; width: 100%; margin-bottom: var(--gap-lg);
 }
 .dart-val-box { 
     flex: 1; max-width: 80px; height: 60px;
-    background: #222; border: 2px solid #444; border-radius: 10px; 
+    background: var(--bg-input); border: 2px solid var(--border-default); border-radius: 10px; 
     display: flex; align-items: center; justify-content: center; 
-    font-weight: bold; font-size: 1.5rem; color: #555;
-    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); transition: all 0.1s;
+    font-weight: bold; font-size: 1.5rem; color: var(--gray-400);
+    box-shadow: inset var(--shadow-sm); transition: all 0.1s;
 }
-.dart-val-box.filled { background: #333; border-color: var(--accent-color); color: var(--accent-color); box-shadow: 0 0 15px rgba(0, 210, 106, 0.1); }
-.dart-val-box.is-miss { color: var(--miss-color) !important; border-color: var(--miss-color) !important; background: rgba(255, 77, 77, 0.1); }
+.dart-val-box.filled { 
+    background: var(--bg-card); border-color: var(--accent-color); 
+    color: var(--accent-color); box-shadow: var(--shadow-neon); 
+}
+#screen-game .dart-val-box.is-miss { 
+    color: var(--miss-color); border-color: var(--miss-color); background: rgba(255, 77, 77, 0.1); 
+}
 
-.keypad-grid { display: grid; width: 100%; max-width: 500px; gap: 10px; }
+/* --- KEYPADS --- */
+.keypad-grid { display: grid; width: 100%; max-width: 500px; gap: var(--gap-sm); }
+
+/* Grundlegende Button Styles */
 .key-btn { 
     min-height: 70px; border: none; border-radius: 10px; 
-    font-size: 1.2rem; font-weight: bold; cursor: pointer; color: #000 !important;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; color: #000;
     box-shadow: 0 4px 0 rgba(0,0,0,0.3); transition: transform 0.05s, box-shadow 0.05s;
     display: flex; align-items: center; justify-content: center; flex-direction: column;
 }
 .key-btn:active { transform: translateY(4px); box-shadow: 0 0 0 rgba(0,0,0,0); }
 
-/* Farben */
-.hit-1, .seg-single { background: var(--seg-single); } 
-.hit-2, .seg-double { background: var(--seg-double); } 
-.hit-3, .seg-triple { background: var(--seg-triple); }
+/* --- SPECIFIC COLORS (ohne !important) --- */
+/* Wir nutzen #screen-game, um die Spezifität zu erhöhen und !important zu vermeiden */
 
-/* Catch-All Selectors */
-.atc-hit, .hit-btn, .btn-hit, .hit { 
-    background: var(--btn-hit-bg) !important; color: #000 !important; border-color: var(--btn-hit-bg) !important; 
+#screen-game .hit-1, #screen-game .seg-single { background: var(--seg-single); } 
+#screen-game .hit-2, #screen-game .seg-double { background: var(--seg-double); } 
+#screen-game .hit-3, #screen-game .seg-triple { background: var(--seg-triple); }
+
+/* ATC / Hit Miss Buttons */
+#screen-game .atc-hit, #screen-game .hit-btn, #screen-game .hit { 
+    background: var(--btn-hit-bg); color: #000; 
 }
-.atc-miss, .miss, .miss-btn, .btn-miss, .miss { 
-    background: var(--btn-miss-bg) !important; color: #000 !important; border-color: var(--btn-miss-bg) !important;
+#screen-game .atc-miss, #screen-game .miss, #screen-game .miss-btn { 
+    background: var(--btn-miss-bg); color: #000; 
 }
 
-.c40-3 { background: var(--c40-3); } 
-.c40-2 { background: var(--c40-2); } 
-.c40-1 { background: var(--c40-1); }
-.bull-layout .bull-btn { background: var(--bull-color); color: #000 !important; }
+/* Catch 40 Colors */
+#screen-game .c40-3 { background: var(--c40-3); } 
+#screen-game .c40-2 { background: var(--c40-2); } 
+#screen-game .c40-1 { background: var(--c40-1); }
 
+/* Bull & Sonstige */
+#screen-game .bull-btn { background: var(--bull-color); color: #000; }
 
-/* --------------------------------------------------
-   4. PRO KEYPAD (Mobile Basis)
-   -------------------------------------------------- */
+/* --- PRO KEYPAD --- */
 .keypad-pro-grid { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 8px; }
-.mod-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px; }
-
 .mod-btn { 
-    background-color: #444 !important; color: #000 !important; 
+    background-color: var(--border-default); color: #000; 
     height: 55px; font-size: 1.2rem; font-weight: bold;
     text-transform: uppercase; letter-spacing: 1px;
-    border: 1px solid rgba(0,0,0,0.05); outline: none; 
-    transition: background-color 0.2s; 
+    border: 1px solid rgba(0,0,0,0.05); 
 }
-.mod-double { border-bottom: 4px solid var(--mod-double); } .mod-triple { border-bottom: 4px solid var(--mod-triple); }
-.active-mod.mod-double { background: var(--mod-double); } .active-mod.mod-triple { background: var(--mod-triple);}
+.mod-double { border-bottom: 4px solid var(--mod-double); } 
+.mod-triple { border-bottom: 4px solid var(--mod-triple); }
+
+.active-mod.mod-double { background: var(--mod-double); } 
+.active-mod.mod-triple { background: var(--mod-triple); }
 
 .num-grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .num-btn { height: 55px; color: black; background: #e0e0e0; font-size: 1.3rem; }
 .num-btn:nth-child(even) { background: #c0c0c0; }
-.mode-double .num-btn { background: var(--mod-double) !important; border: 1px solid rgba(255,255,255,0.3); }
-.mode-triple .num-btn { background: var(--mod-triple) !important; border: 1px solid rgba(255,255,255,0.3); }
 
-.bottom-row-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 0.8fr; gap: 6px; margin-top: 5px; }
-.bull-btn { background: var(--bull-color); font-size: 0.9rem; line-height: 1.1; }
-#btn-pro-back { background: #333; color:black !important; font-size: 1.5rem; }
+/* Modifiers auf Numbers anwenden */
+.mode-double .num-btn { background: var(--mod-double); }
+.mode-triple .num-btn { background: var(--mod-triple); }
 
-/* NEU: ATC Grid Layout */
-.keypad-atc-grid {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr;
-    gap: 10px; height: 220px; width: 100%; max-width: 500px; margin: 0 auto;
-}
-.atc-hit {
-    grid-column: 1 / 4; 
-    background: var(--seg-triple) !important; color: black !important;
-    font-size: 1.5rem !important; font-weight: 900 !important;
-}
-.atc-miss {
-    grid-column: 1 / 3;
-    background: var(--btn-miss-bg) !important; color: black !important;
-    font-size: 1.2rem !important;
-}
-.atc-undo {
-    grid-column: 3 / 4; 
-    background: #555 !important; color: black !important; font-size: 1.5rem !important;
-}
+#btn-pro-back { background: var(--bg-card); color: white; }
 
-
-/* --------------------------------------------------
-   5. FIX DESKTOP LAYOUT (Split Screen)
-   -------------------------------------------------- */
+/* --- DESKTOP SPLIT SCREEN (>= 1024px) --- */
 @media (min-width: 1024px) {
     #screen-game.active {
         display: grid !important; 
-        grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; 
+        grid-template-columns: 1fr 1fr; 
+        grid-template-rows: auto auto; 
         gap: 40px; 
         align-items: stretch; justify-items: center; align-content: center;
-        max-width: 1200px; margin: 0 auto; height: 100%; 
+        max-width: 1400px; /* Synchronisiert mit base.css */
+        margin: 0 auto; height: 100%; 
     }
-
     .game-header-area { 
         grid-column: 1 / -1; grid-row: 1;
-        background: #252525; padding: 15px; border-radius: 15px; border: 1px solid #444; 
+        background: #252525; padding: 15px; border-radius: 15px; border: 1px solid var(--border-default); 
         width: 100%; max-width: 800px; display: flex; justify-content: space-around; align-items: center;
-        align-self: center; 
     }
-
     .target-box { 
         grid-column: 1; grid-row: 2; height: auto; min-height: 520px; 
         justify-self: end; margin: 0;
     }
-    .target-value { font-size: 8rem; } 
-
-    /* KEYPAD HANDLING */
-    .keypad-pro-grid { 
+    .keypad-pro-grid, .keypad-grid { 
         grid-column: 2; grid-row: 2; justify-self: start; margin-top: 0;
-        height: 100%; justify-content: space-between; 
     }
-    .keypad-pro-grid .num-grid-container {
-        flex: 1; margin: 10px 0; grid-template-rows: repeat(4, 1fr);
-    }
-    .keypad-pro-grid .num-btn { height: 100%; min-height: 0; }
-
-    .keypad-grid {
-        grid-column: 2; grid-row: 2; justify-self: start; margin-top: 0;
-        height: auto; align-self: center; 
-    }
-    .keypad-grid .key-btn { height: 90px; }
-    
-    .keypad-pro-grid .mod-btn, .keypad-pro-grid .key-btn { min-height: 70px; font-size: 1.4rem; }
+    /* Pro Keypad Fix für volle Höhe */
+    .keypad-pro-grid { height: 100%; justify-content: space-between; min-height: 520px; }
+    .keypad-pro-grid .num-grid-container { flex: 1; margin: 10px 0; grid-template-rows: repeat(4, 1fr); }
+    .keypad-pro-grid .num-btn { height: 100%; }
 }
 
-@keyframes shake { 
-    0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } 
+/* =========================================
+   RESULT SCREEN SPECIFICS
+   ========================================= */
+
+#result-container {
+    position: relative;
+    padding-top: var(--gap-lg); 
 }
 
-
-/* --------------------------------------------------
-   6. RESULT SCREEN & WINNER
-   -------------------------------------------------- */
-   
-.result-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 15px; margin-top: 20px; width: 100%;
-}
-.result-card {
-    background: var(--panel-color);
-    border: 1px solid #444; border-radius: 12px; padding: 20px;
-    cursor: pointer; transition: transform 0.2s, border-color 0.2s;
-}
-.result-card:hover { border-color: var(--accent-color); transform: translateY(-2px); }
-.winner-card { border-left: 5px solid var(--accent-color); }
-
-.card-player-name { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; color: var(--text-color); }
-
-.stats-row-main {
-    display: flex; justify-content: space-around;
-    background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-bottom: 15px;
-}
-.stat-item { text-align: center; }
-.stat-item small { color: #888; font-size: 0.7rem; text-transform: uppercase; }
-.stat-item .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--highlight-color); }
-
-.stats-row-sub { display: flex; justify-content: space-between; font-size: 0.85rem; color: #aaa; }
-
-.details-panel {
-    margin-top: 25px; padding: 15px;
-    background: rgba(255,255,255,0.03); border-radius: 8px; width: 100%;
-}
-
-.details-grid-mini {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-    gap: 8px; margin-top: 10px;
-}
-
-.detail-box {
-    background: #333; padding: 8px; border-radius: 6px; text-align: center; border: 1px solid #444;
-}
-.detail-box.hit { border-color: var(--accent-color); color: var(--accent-color); }
-.detail-box.miss { opacity: 0.5; }
-.detail-box small { font-size: 0.65rem; color: #888; display: block; }
-
+/* Header Bereich: Winner Info */
 .result-header {
-    text-align: center; margin-bottom: 20px; padding: 20px;
+    text-align: center; 
+    margin-bottom: var(--gap-lg); 
+    padding: var(--gap-lg);
     background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-.winner-badge {
-    display: inline-block;
-    background: linear-gradient(45deg, #FFD700, #FFA500);
-    color: black; font-weight: bold;
-    padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;
-    margin-bottom: 10px; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
-    animation: pop 0.5s ease-out;
+    border-bottom: 1px solid var(--bg-glass);
 }
 
-.result-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
-.result-tab-btn {
-    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #888;
-    padding: 10px 20px; border-radius: 30px; cursor: pointer;
-    font-size: 0.95rem; transition: all 0.2s ease;
-    display: flex; align-items: center; gap: 8px;
-}
-.result-tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-.result-tab-btn.active {
-    background: var(--accent-color); color: #000; font-weight: bold;
-    border-color: var(--accent-color); box-shadow: 0 0 10px rgba(0, 210, 106, 0.3);
-}
-.tab-crown { font-size: 1.1em; }
-
+/* Action Buttons Oben Rechts */
 .result-actions-top {
-    position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10;
+    position: absolute; 
+    top: 30px; 
+    right: 30px; 
+    display: flex; 
+    gap: var(--gap-sm); 
+    z-index: 10;
 }
+
+/* Mobile Anpassung: Buttons untereinander oder zentriert */
 @media (max-width: 600px) {
     .result-actions-top {
-        position: relative; top: 0; right: 0; justify-content: center; margin-bottom: 20px; width: 100%;
+        position: relative; 
+        justify-content: center; 
+        margin-bottom: 20px; 
+        width: 100%;
+        top: auto; right: auto;
     }
     .btn-compact { flex: 1; justify-content: center; }
 }
 
-
-/* --------------------------------------------------
-   7. GAME ANIMATIONS (MISS, BUST, CHECK)
-   -------------------------------------------------- */
-
-.anim-miss {
-    color: var(--miss-color) !important; font-size: 6rem;
-    text-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
-    animation: miss-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-}
-@keyframes miss-pop {
-    0% { transform: scale(0.8); opacity: 0; }
-    40% { transform: scale(1.1) rotate(-5deg); opacity: 1; }
-    60% { transform: scale(1.1) rotate(5deg); }
-    80% { transform: scale(1.1) rotate(-3deg); }
-    100% { transform: scale(1) rotate(0); opacity: 1; }
-}
-
-.anim-bust {
-    color: #ff4444 !important; text-shadow: 2px 2px 0px #000;
-    animation: bust-shake 0.5s ease-in-out both;
-}
-@keyframes bust-shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-10px); } 40% { transform: translateX(10px); }
-    60% { transform: translateX(-5px); } 80% { transform: translateX(5px); }
-}
-
-.anim-check {
-    color: var(--accent-color) !important; text-shadow: 0 0 30px var(--accent-color);
-    animation: check-zoom 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
-}
-@keyframes check-zoom {
-    0% { transform: scale(0.2); opacity: 0; }
-    60% { transform: scale(1.3); opacity: 1; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-
-/* --------------------------------------------------
-   8. WINNER SHOWCASE
-   -------------------------------------------------- */
-
+/* Winner Styles */
 .winner-showcase {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     margin: 10px 0 0 0; text-align: center;
@@ -349,20 +213,6 @@
     0%, 100% { transform: translateY(0) rotate(0deg); }
     50% { transform: translateY(-10px) rotate(5deg); }
 }
-
-.badge-sdt {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 4px;
-    font-size: 0.7rem; font-weight: bold; color: #000; margin-left: 2px;
-}
-.bg-s { background-color: var(--seg-single); }
-.bg-d { background-color: var(--seg-double); }
-.bg-t { background-color: var(--seg-triple); }
-
-.res-win { color: var(--accent-color); font-weight: bold; }
-.res-loss { color: var(--miss-color); }
-.res-solo { color: #888; font-style: italic; }
-
 .winner-name {
     font-family: 'Permanent Marker', cursive;
     font-size: 2.5rem; color: #fff; text-shadow: 2px 2px 0 #000;
@@ -375,85 +225,136 @@
 .winner-showcase.compact .winner-crown { font-size: 3rem; }
 .winner-showcase.compact .winner-name { font-size: 2.5rem; }
 
-
-/* --------------------------------------------------
-   9. X01 STATS LAYOUT & CRICKET
-   -------------------------------------------------- */
-
-.grid-x01-layout {
-    display: grid; grid-template-columns: 2.03fr 1.27fr 0.7fr; 
-    gap: 20px; margin-bottom: 20px; align-items: start; 
+/* Tabs (Spieler Auswahl) */
+.result-tabs { 
+    display: flex; justify-content: center; gap: var(--gap-sm); 
+    margin-bottom: 25px; flex-wrap: wrap; 
 }
-@media (max-width: 1200px) {
-    .grid-x01-layout { grid-template-columns: 1fr 1fr; }
-    .grid-x01-layout .chart-wrapper-big { grid-column: 1 / -1; height: 300px; }
+.result-tab-btn {
+    background: var(--bg-glass); border: 1px solid rgba(255,255,255,0.1); color: #888;
+    padding: 10px 20px; border-radius: 30px; cursor: pointer;
+    font-size: 0.95rem; transition: all 0.2s ease;
+    display: flex; align-items: center; gap: 8px;
 }
-@media (max-width: 768px) { .grid-x01-layout { grid-template-columns: 1fr; } }
-
-.training-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;
+.result-tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.result-tab-btn.active {
+    background: var(--accent-color); color: #000; font-weight: bold;
+    border-color: var(--accent-color); box-shadow: var(--shadow-neon);
 }
 
+/* Result Cards & Grids */
+.result-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--gap-md); margin-top: var(--gap-lg); width: 100%;
+}
+.result-card {
+    background: var(--bg-panel); border: 1px solid var(--border-default); 
+    border-radius: 12px; padding: 20px; cursor: pointer; transition: transform 0.2s, border-color 0.2s;
+}
+.result-card:hover { border-color: var(--accent-color); transform: translateY(-2px); }
+.winner-card { border-left: 5px solid var(--accent-color); }
 
-/* --- CRICKET BOARD --- */
+/* =========================================
+   CRICKET BOARD (Restored & Optimized)
+   ========================================= */
+
 .cricket-board {
     display: flex; flex-direction: column; width: 100%; max-width: 600px;
-    background: #252525; border: 1px solid #444; border-radius: 12px;
-    overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-default); 
+    border-radius: 12px;
+    overflow: hidden; 
+    margin-bottom: var(--gap-lg);
+    box-shadow: var(--shadow-md);
+    /* Zentrieren im Container */
+    align-self: center; 
 }
 
-.cricket-header {
-    display: grid; background: #1a1a1a; border-bottom: 2px solid #333; min-height: 50px;
+/* Grid Rows (Header & Data) */
+/* Die Spaltenbreiten (grid-template-columns) werden inline per JS gesetzt */
+.cricket-header, .cricket-row {
+    display: grid; 
+    border-bottom: 1px solid var(--border-default);
+    align-items: stretch;
 }
-.c-player-header {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 8px; border-right: 1px solid #333;
-    font-size: 0.9rem; font-weight: bold; color: #888;
-    position: relative; overflow: hidden;
-}
-.c-player-header.active {
-    background: rgba(0, 210, 106, 0.1); color: var(--accent-color);
-    box-shadow: inset 0 -3px 0 var(--accent-color);
-}
-.c-score-big { font-size: 1.4rem; color: #fff; margin-top: 2px; }
-
-.cricket-row { display: grid; border-bottom: 1px solid #333; min-height: 45px; }
 .cricket-row:last-child { border-bottom: none; }
-.cricket-row.closed-row {
-    background: repeating-linear-gradient(45deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 10px, rgba(0,0,0,0.3) 10px, rgba(0,0,0,0.3) 20px);
-    opacity: 0.6;
+
+/* --- HEADER BEREICH --- */
+.c-player-header {
+    padding: 10px 5px; 
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--text-muted); font-weight: bold; font-size: 0.85rem;
+    text-transform: uppercase; letter-spacing: 1px;
+    background: rgba(0,0,0,0.1); 
+    transition: background 0.2s, color 0.2s;
 }
 
+/* Aktiver Spieler im Header */
+.c-player-header.active {
+    background: var(--accent-dim); 
+    color: var(--text-main);
+    box-shadow: inset 0 -3px 0 var(--accent-color); /* Grüner Balken unten */
+}
+
+/* Großer Score (Restpunkte) */
+.c-score-big {
+    font-size: 1.5rem; color: var(--text-main); font-weight: 900; 
+    line-height: 1.2; margin-top: 4px;
+}
+.c-player-header.active .c-score-big { color: white; text-shadow: 0 0 10px var(--accent-glow); }
+
+
+/* --- ROW & CELLS --- */
+
+/* Mittlere Ziel-Spalte (20, 19, ... B) */
 .c-target-cell {
     display: flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 1.2rem; color: var(--accent-color);
-    background: #202020; border-left: 1px solid #333; border-right: 1px solid #333;
+    font-weight: 900; font-size: 1.3rem; 
+    color: var(--accent-color); 
+    background: var(--bg-input); /* Etwas dunkler als der Rest */
+    border-left: 1px solid var(--border-default);
+    border-right: 1px solid var(--border-default);
+    min-height: 50px;
 }
-.closed-row .c-target-cell { color: #666; }
 
+/* Spieler-Spalten (Marks) */
 .c-mark-cell {
     display: flex; align-items: center; justify-content: center;
-    border-right: 1px solid #333; position: relative;
+    position: relative; 
+    min-height: 50px;
+    transition: background 0.2s;
 }
-.c-mark-cell.active-col { background: rgba(255, 255, 255, 0.02); }
 
+/* Aktiver Spieler Spalte (dezentes Highlight) */
+.c-mark-cell.active-col {
+    background: rgba(255, 255, 255, 0.03); 
+}
+
+/* Die X und O Symbole (SVG) */
 .mark-svg {
-    width: 24px; height: 24px; stroke-width: 3; stroke-linecap: round; fill: none; stroke: #eee; 
+    width: 24px; height: 24px; 
+    stroke: var(--gray-300); stroke-width: 2.5; fill: none; stroke-linecap: round;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+    transition: stroke 0.2s;
 }
+
+/* Wenn Spieler aktiv ist, leuchten seine Marks grün */
+.active-col .mark-svg { 
+    stroke: var(--accent-color); 
+    filter: drop-shadow(0 0 4px var(--accent-glow)); 
+}
+
+
+/* --- ZUSTÄNDE --- */
+
+/* Geschlossene Reihe (wenn alle 3 Marks haben) */
+.closed-row .c-target-cell {
+    color: var(--text-muted); 
+    text-decoration: line-through; 
+    opacity: 0.5;
+}
+.closed-row {
+    background: rgba(0,0,0,0.2); /* Ganze Zeile abdunkeln */
+}
+
 .active .mark-svg { stroke: var(--accent-color); }
-
-/* --- KEYPAD CRICKET --- */
-#keypad-cricket {
-    display: grid; grid-template-columns: 1fr 1fr 1fr 0.8fr; gap: 10px;
-    width: 100%; max-width: 500px;
-}
-.kp-mod-row {
-    grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px;
-}
-.kp-nums {
-    grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-}
-
-/* Modifiers Feedback */
-.num-btn.mod-active-d { background-color: var(--mod-double) !important; color: #000 !important; }
-.num-btn.mod-active-t { background-color: var(--mod-triple) !important; color: #000 !important; }

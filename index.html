@@ -5,22 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dart Coach V2.0</title>
     <link rel="stylesheet" href="css/base.css">
-	<link rel="stylesheet" href="css/overlays.css">
+    <link rel="stylesheet" href="css/overlays.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/layouts.css">
     <link rel="stylesheet" href="css/game.css">
-	<link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#00d26a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-	<meta name="mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="assets/icon-192.png">
+    
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	<script type="module" src="js/app.js"></script>
-
+    <script type="module" src="js/app.js"></script>
 </head>
 <body>
 
@@ -32,10 +32,10 @@
             <button id="btn-restart" class="header-btn" style="display:none; margin-left: 5px;">
                 <span class="icon">↻</span> Neustart
             </button>
-			<div id="hue-status-widget" class="hue-widget" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 20px; border: 1px solid #444;">
-					<span id="hue-icon" style="font-size: 1.2rem; filter: grayscale(100%);">💡</span>
-					<span id="hue-text" style="font-size: 0.8rem; color: #888;">Licht: Prüfen...</span>
-			</div>
+            <div id="hue-status-widget" class="hue-widget" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 20px; border: 1px solid #444;">
+                <span id="hue-icon" style="font-size: 1.2rem; filter: grayscale(100%);">💡</span>
+                <span id="hue-text" style="font-size: 0.8rem; color: #888;">Licht: Prüfen...</span>
+            </div>
         </div>
         
         <h2 id="app-title">🎯 DART COACH V2</h2>
@@ -46,8 +46,8 @@
                 <span id="ad-status-text">AUTODARTS</span>
             </div>
             <button id="btn-logout" class="header-btn" style="display:none;">
-				<span class="icon">🔓</span>
-			</button>
+                <span class="icon">🔓</span>
+            </button>
             <button id="btn-fullscreen" class="header-btn" style="margin-left:5px;">
                 <span class="icon">⛶</span>
             </button>
@@ -79,8 +79,8 @@
                 <p id="login-status" style="color:#eab308; font-size:0.9rem; text-align:center; min-height:20px; margin-top:10px;"></p>
             </div>
         </div>
-		
-		<div id="screen-dashboard" class="screen hidden">
+        
+        <div id="screen-dashboard" class="screen hidden">
             <div class="dashboard-header">
                 <h3>Zeit für das nächste Level, mein kleiner Padavan!</h3>
                 <p style="color:#888; font-size:0.9rem;"><h5>Jeder Dart zählt. Egal ob du an deinem Average feilst oder die Doppel trainierst – </br>heute ist der Tag, an dem du besser wirst als gestern. Ran an das Board!</h5></p>
@@ -128,7 +128,7 @@
                     <div class="setup-col">
                         <div class="col-header">Verfügbar</div>
                         <div id="setup-pool-list" class="player-list-scrollable"></div>
-                        </div>
+                    </div>
 
                     <div class="setup-col active-col">
                         <div class="col-header">
@@ -143,8 +143,7 @@
 
                 <div id="setup-options-wrapper" class="setup-row-options">
                     <div class="col-header">Regeln & Format</div>
-                    <div id="setup-options-container">
-                        </div>
+                    <div id="setup-options-container"></div>
                 </div>
 
             </div>
@@ -155,10 +154,9 @@
         </div>
         
         <div id="screen-game-selector" class="screen hidden">
-			<h3>Spielauswahl</h3>
-            <div class="dashboard-grid selector-grid" id="game-selector-grid">
-                </div>
-		</div>
+            <h3>Spielauswahl</h3>
+            <div class="dashboard-grid selector-grid" id="game-selector-grid"></div>
+        </div>
 
         <div id="screen-game" class="screen hidden">
             
@@ -198,107 +196,31 @@
                 </div>
             </div>
 
-<!--
-			<div id="keypad-warmup" class="keypad-grid hidden" style="grid-template-columns:1fr 1fr 1fr;">
-                <button class="key-btn hit-1" data-val="1">1 Treffer</button>
-                <button class="key-btn hit-2" data-val="2">2 Treffer</button>
-                <button class="key-btn hit-3" data-val="3">3 Treffer</button>
-                <button class="key-btn miss" data-val="0" style="grid-column: span 3;">Kein Treffer</button>
             </div>
-
-            <div id="keypad-hitmiss" class="keypad-grid hidden" style="grid-template-columns:1fr 1fr;">
-                <button class="key-btn atc-hit" data-val="HIT">TREFFER</button>
-                <button class="key-btn atc-miss" data-val="MISS">DANEBEN</button>
-            </div>
-
-            <div id="keypad-segment" class="keypad-grid hidden" style="grid-template-columns:1fr 1fr 1fr;">
-                <button class="key-btn seg-single" data-val="S">Single</button>
-                <button class="key-btn seg-double" data-val="D">Double</button>
-                <button class="key-btn seg-triple" data-val="T">Triple</button>
-                <button class="key-btn miss" data-val="0" style="grid-column: span 3;">Kein Treffer</button>
-            </div>
-
-            <div id="keypad-bull-only" class="keypad-grid hidden bull-layout">
-                <button class="key-btn bull-btn" data-val="25">Single Bull</button>
-                <button class="key-btn bull-btn" data-val="50">Double Bull</button>
-                <button class="key-btn miss" data-val="0" style="grid-column: span 2;">Kein Treffer</button>
-            </div>
-
-            <div id="keypad-catch40" class="keypad-grid hidden" style="grid-template-columns:1fr 1fr;">
-                <button class="key-btn c40-3" data-val="3">2 Darts (3 Pkt)</button>
-                <button class="key-btn c40-2" data-val="2">3 Darts (2 Pkt)</button>
-                <button class="key-btn c40-1" data-val="1">4-6 Darts (1 Pkt)</button>
-                <button class="key-btn miss" data-val="0">Fail (0 Pkt)</button>
-            </div>
-
-			<div id="keypad-yesno" class="keypad-grid hidden" style="grid-template-columns: 1fr 1fr; gap: 10px;">
-				<button class="key-btn" data-val="HIT" style="background:var(--accent-color); color:black; font-size:1.5rem; font-weight:bold; height:80px;">
-					✅ Treffer
-				</button>
-				<button class="key-btn" data-val="0" style="background:var(--miss-color); color:white; font-size:1.5rem; font-weight:bold; height:80px;">
-					❌ Daneben
-				</button>
-			</div>
--->
-            <div id="keypad-pro" class="keypad-pro-grid hidden">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:5px;">
-                    <button id="btn-mod-double" class="key-btn mod-btn mod-double" style="height:50px;">DOUBLE</button>
-                    <button id="btn-mod-triple" class="key-btn mod-btn mod-triple" style="height:50px;">TRIPLE</button>
-                </div>
-                <div class="num-grid-container" id="num-grid-container">
-                    <button class="key-btn num-btn" data-val="1">1</button>
-                    <button class="key-btn num-btn" data-val="2">2</button>
-                    <button class="key-btn num-btn" data-val="3">3</button>
-                    <button class="key-btn num-btn" data-val="4">4</button>
-                    <button class="key-btn num-btn" data-val="5">5</button>
-                    <button class="key-btn num-btn" data-val="6">6</button>
-                    <button class="key-btn num-btn" data-val="7">7</button>
-                    <button class="key-btn num-btn" data-val="8">8</button>
-                    <button class="key-btn num-btn" data-val="9">9</button>
-                    <button class="key-btn num-btn" data-val="10">10</button>
-                    <button class="key-btn num-btn" data-val="11">11</button>
-                    <button class="key-btn num-btn" data-val="12">12</button>
-                    <button class="key-btn num-btn" data-val="13">13</button>
-                    <button class="key-btn num-btn" data-val="14">14</button>
-                    <button class="key-btn num-btn" data-val="15">15</button>
-                    <button class="key-btn num-btn" data-val="16">16</button>
-                    <button class="key-btn num-btn" data-val="17">17</button>
-                    <button class="key-btn num-btn" data-val="18">18</button>
-                    <button class="key-btn num-btn" data-val="19">19</button>
-                    <button class="key-btn num-btn" data-val="20">20</button>
-                </div>
-                <div class="bottom-row-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 0.6fr; gap:5px; margin-top:5px;">
-                    <button class="key-btn bull-btn" data-val="25" style="font-size:0.8rem; line-height:1.1;">Single<br>Bull</button>
-                    <button class="key-btn bull-btn" data-val="50" style="font-size:0.8rem; line-height:1.1;">Double<br>Bull</button>
-                    <button class="key-btn miss" data-val="0" style="font-size:0.8rem; line-height:1.1;">Kein<br>Treffer</button>
-                    <button id="btn-pro-back" class="key-btn" style="background:#555; color:black !important;">⬅</button>
-                </div>
-            </div>
-        </div>
 
         <div id="screen-result" class="screen hidden">
             <div id="result-container" class="stats-container-width" style="margin-top: 20px;"></div>
         </div>
 
         <div id="screen-stats" class="screen hidden">
-			<h3>Statistik</h3>
-			<div class="stats-container-width">
-				<div class="stats-filter-row">
-					<select id="stats-player-select" class="stats-dropdown">
-						<option value="">Lade Spieler...</option>
-					</select>
-			</div>
-				
-				<div id="stats-main-dashboard"></div> 
-			</div>
-		</div>
-		
-		<div id="screen-management" class="screen hidden">
-			<div id="management-container" class="stats-container-width" style="margin-top:20px;">
-				</div>
-		</div>
+            <h3>Statistik</h3>
+            <div class="stats-container-width">
+                <div class="stats-filter-row">
+                    <select id="stats-player-select" class="stats-dropdown">
+                        <option value="">Lade Spieler...</option>
+                    </select>
+                </div>
+                
+                <div id="stats-main-dashboard"></div> 
+            </div>
+        </div>
+        
+        <div id="screen-management" class="screen hidden">
+            <div id="management-container" class="stats-container-width" style="margin-top:20px;"></div>
+        </div>
 
     </main>
+
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal-content">
             <p id="modal-text" style="font-size:1.1rem; margin-bottom:20px;">Nachricht</p>
@@ -308,8 +230,8 @@
             </div>
         </div>
     </div>
-	
-	<script>
+    
+    <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js')
@@ -318,6 +240,6 @@
         });
       }
     </script>
-	
+    
 </body>
 </html>

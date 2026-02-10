@@ -128,16 +128,14 @@ function _showMatchModal(title, message, btnText, callback) {
 	const modal = document.createElement('div');
 	modal.className = 'modal-overlay'; 
 	
-	// Timeout für Animation
 	setTimeout(() => modal.classList.add('active'), 10);
 
 	modal.innerHTML = `
-		<div class="modal-box">
-			<h2 class="modal-title">${title}</h2>
-			<p class="modal-text">${message}</p>
+		<div class="modal-content"> <h2 style="margin-top:0; margin-bottom:15px; color:var(--text-main); font-size:1.5rem;">${title}</h2>
+			<p id="modal-text">${message}</p>
 			
-			<div style="display:flex; justify-content:center;">
-				<button id="modal-btn-next" class="btn-hero btn-hero-primary" style="min-width:180px;">
+			<div class="modal-buttons">
+				<button id="modal-btn-next" class="modal-btn btn-yes">
 					${btnText || "WEITER"}
 				</button>
 			</div>
@@ -160,7 +158,6 @@ function _showMatchModal(title, message, btnText, callback) {
 		if (callback) callback();
 	};
 	
-	// Optional: Enter-Taste zum Bestätigen
 	const keyHandler = (e) => {
 		if(e.key === 'Enter') {
 			document.removeEventListener('keydown', keyHandler);
@@ -187,27 +184,25 @@ function _toggleFullscreen() {
 function _showConfirm(title, message, onConfirm, options = {}) {
     const confirmLabel = options.confirmLabel || "JA";
     const cancelLabel = options.cancelLabel || "ABBRECHEN";
-    // Standard-Klassen nutzen, falls keine übergeben werden
-    const confirmClass = options.confirmClass || "btn-hero-primary"; 
-    const cancelClass = options.cancelClass || "btn-hero-secondary"; 
+    
+    // Neue Default-Klassen (btn-yes / btn-no statt btn-hero...)
+    const confirmClass = options.confirmClass || "btn-yes"; 
+    const cancelClass = options.cancelClass || "btn-no"; 
 
     const modal = document.createElement('div');
-    // 'active' Klasse sorgt für den Fade-In Effekt (siehe CSS)
     modal.className = 'modal-overlay'; 
     
-    // Kleines Timeout, damit die Animation greift
     setTimeout(() => modal.classList.add('active'), 10);
 
     modal.innerHTML = `
-        <div class="modal-box">
-            <h2 style="margin-top:0; margin-bottom:15px; color:var(--text-color); font-size:1.5rem;">${title}</h2>
-            <p style="color:#ccc; margin-bottom:30px; line-height:1.5; font-size:1rem;">${message}</p>
+        <div class="modal-content"> <h2 style="margin-top:0; margin-bottom:15px; color:var(--text-main); font-size:1.5rem;">${title}</h2>
+            <p id="modal-text">${message}</p>
             
-            <div style="display:flex; gap:15px; justify-content:center;">
-                <button id="modal-btn-confirm" class="btn-hero ${confirmClass}" style="min-width:120px; font-size:0.9rem; padding:12px;">
+            <div class="modal-buttons">
+                <button id="modal-btn-confirm" class="modal-btn ${confirmClass}">
                     ${confirmLabel}
                 </button>
-                <button id="modal-btn-cancel" class="btn-hero ${cancelClass}" style="min-width:120px; font-size:0.9rem; padding:12px;">
+                <button id="modal-btn-cancel" class="modal-btn ${cancelClass}">
                     ${cancelLabel}
                 </button>
             </div>
@@ -221,7 +216,6 @@ function _showConfirm(title, message, onConfirm, options = {}) {
 
     const close = () => {
         modal.classList.remove('active');
-        // Warten bis CSS Animation fertig ist, dann aus DOM entfernen
         setTimeout(() => {
             if(modal.parentNode) document.body.removeChild(modal);
         }, 300);
@@ -251,7 +245,7 @@ export const UI = {
         // SUB-MODULE INITIALISIEREN
         if(Auth) Auth.init();
         if(Setup) Setup.init();
-		if(Keyboard) Keyboard.init();
+		// if(Keyboard) Keyboard.init();
         // Mgmt & Stats brauchen kein Init beim Start, werden beim Klick initiiert
         
         // --- EVENT LISTENER ---

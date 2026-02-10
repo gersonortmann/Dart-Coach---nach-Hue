@@ -1,184 +1,174 @@
 @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap');
 
 /* =========================================
-   BASE: Variables, Reset, Typography, Header
+   BASE: Variables, Reset, Typography
    ========================================= */
 
-/* 1. Global Reset & Box Sizing */
-*, *::before, *::after {
-    box-sizing: border-box; /* WICHTIG: Padding vergrößert Elemente nicht mehr */
-}
-
 :root {
-    /* Core Colors */
-    --bg-color: #1e1e1e;
-    --panel-color: #2d2d2d;
+    /* --- COLOR PALETTE: CORE --- */
+    /* Zentrale Definition der Grautöne, um inkonsistente Hex-Codes zu vermeiden */
+    --gray-900: #051b11; /* Fast Schwarz */
+    --gray-800: #1e1e1e; /* App Background */
+    --gray-700: #2d2d2d; /* Panels */
+    --gray-600: #333333; /* Cards */
+    --gray-500: #444444; /* Borders Default */
+    --gray-400: #555555; /* Borders Strong */
+    --gray-300: #666666; /* Borders Hover */
+    --gray-200: #888888; /* Muted Text */
+    --gray-100: #aaaaaa; /* Icons / Secondary Text */
+    --white-dim: #e4e4e4; /* Main Text */
+    --white:     #ffffff;
+
+    /* --- SEMANTIC COLORS (Verwendung im Code) --- */
+    --bg-app:     var(--gray-800);
+    --bg-panel:   var(--gray-700);
+    --bg-card:    var(--gray-600);
+    --bg-input:   #262626; /* Spezieller Input Background */
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+    --bg-glass:   rgba(255, 255, 255, 0.05); /* Für Glaseffekte */
+
+    --border-default: var(--gray-500);
+    --border-strong:  var(--gray-400); /* Z.B. für Header Buttons */
+    --border-hover:   var(--gray-300);
     
-    /* FIX: Gemini-Style Grau statt hartem Weiß */
-    --text-color: #e4e4e4;
-	
+    --text-main:  var(--white-dim);
+    --text-muted: var(--gray-200);
+    --text-dark:  var(--gray-900);
+    --text-icon:  var(--gray-100);
+
+    /* --- ACCENTS & GAMEPLAY --- */
     --accent-color: #00d26a; 
-    --highlight-color: #ffc107;
-    --miss-color: #ff4d4d;
+    --accent-dim:   rgba(0, 210, 106, 0.1);
+    --accent-glow:  rgba(0, 210, 106, 0.4);
     
-    /* Keypad Colors (Logic grouping) */
-    --seg-single: #d1fae5;  /* Sehr helles Minz */
-    --seg-double: #6ee7b7;  /* Mittleres Smaragd */
-    --seg-triple: #34d399;  /* Intensives, aber helles Smaragd */
+    --highlight-color: #ffc107; /* Gold/Gelb für Targets */
+    
+    --miss-color:  #ff4d4d;
+    --btn-miss-bg: #fca5a5;
+    --btn-hit-bg:  #6ee7b7;
+
+    --seg-single: #d1fae5;
+    --seg-double: #6ee7b7;
+    --seg-triple: #34d399;
     
     --mod-double: #60a5fa; 
     --mod-triple: #2563eb; 
+    --bull-color: #fde047; 
     
-	--bull-color: #fde047; 
-    
-    /* Game Specific */
     --c40-3: #eab308; 
     --c40-2: #22c55e; 
     --c40-1: #3b82f6; 
-	
-	--btn-hit-bg: #6ee7b7;   /* Ein schönes, helles Smaragdgrün */
-    --btn-miss-bg: #fca5a5;  /* Ein weiches, aber klares Pastell-Rot */
+
+    /* --- SPACING SYSTEM (Löst Point 5) --- */
+    --gap-xxs: 4px;   /* Neu */
+    --gap-xs:  8px;   /* Angepasst auf 8er Raster */
+    --gap-sm:  12px;
+    --gap-md:  16px;
+    --gap-lg:  24px;
+    --gap-xl:  32px;
+    --gap-xxl: 48px;  /* Neu */
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-round: 30px;
+
+    /* --- SHADOWS --- */
+    --shadow-sm: 0 2px 5px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 10px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 25px rgba(0,0,0,0.4);
+    --shadow-neon: 0 0 10px var(--accent-dim);
+
+    /* --- BREAKPOINTS (Referenz für @media) --- */
+    /* Mobile:   < 768px */
+    /* Tablet:   >= 768px */
+    /* Desktop:  >= 1024px */
+    /* Wide:     >= 1200px (Container Max) */
 }
+
+/* Global Reset */
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    margin: 0;
-    padding: 0;
-    
-    display: flex;
-    flex-direction: column;
-    
-    /* FIX: Nutze dvh für mobile Browser (Dynamic Viewport Height) */
-    height: 100vh;
-    height: 100dvh; 
-    
-    overflow: hidden; /* Scrollen nur in .screen Elementen erlauben */
-    
-    /* App-Feeling: Kein Text markieren, kein Tap-Highlight */
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    margin: 0; padding: 0;
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh; 
+    overflow: hidden;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Utility Classes */
+h1, h2, h3, h4, h5 { margin: 0 0 var(--gap-sm) 0; font-weight: 700; }
+a { color: var(--accent-color); text-decoration: none; }
+
 .hidden { display: none !important; }
 .active { display: flex !important; }
 
-/* =========================================
-   HEADER OPTIMIERUNG
-   ========================================= */
+/* --- HEADER --- */
 header {
     height: 60px; 
     background-color: #000;
     border-bottom: 2px solid var(--accent-color);
-    padding: 0 15px;
-    flex-shrink: 0;
-    z-index: 100;
-
-    /* FIX: CSS Grid statt Absolute Positioning */
-    display: grid;
-    /* 3 Spalten: Links (Rest) | Mitte (Inhalt) | Rechts (Rest) */
-    grid-template-columns: 1fr auto 1fr; 
+    padding: 0 var(--gap-md);
+    flex-shrink: 0; z-index: 100;
+    display: grid; grid-template-columns: 1fr auto 1fr; 
     align-items: center;
 }
 
 header h2 { 
-    font-size: 1.2rem; 
-    text-transform: uppercase; 
-    letter-spacing: 1px; 
-    margin: 0; 
-    white-space: nowrap; /* Verhindert Umbruch des Titels */
-    justify-self: center; /* Zentriert den Titel exakt */
-    text-align: center;
+    font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; 
+    margin: 0; white-space: nowrap; justify-self: center; text-align: center;
 }
 
-/* Container-Anpassung für Grid */
-.header-left { 
-    display: flex; 
-    gap: 10px; 
-    justify-self: start; /* Links bündig */
-}
+.header-left { display: flex; gap: var(--gap-sm); justify-self: start; }
+.header-right { display: flex; gap: var(--gap-sm); justify-self: end; }
 
-.header-right { 
-    display: flex; 
-    gap: 10px; 
-    justify-self: end; /* Rechts bündig */
-}
-
-/* Header Buttons */
 .header-btn {
-    background: #333; 
-    color: #ccc; 
-    border: 1px solid #555;
-    padding: 0 12px; /* Etwas kompakter */
-    border-radius: 6px; 
-    cursor: pointer; 
-    height: 36px;
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    font-size: 1rem; 
-    transition: all 0.2s ease;
+    background: var(--bg-card); 
+    color: #ccc; /* Fallback */
+    color: var(--text-icon);
+    border: 1px solid var(--border-strong); /* Variable statt #555 */
+    padding: 0 12px; border-radius: 6px; 
+    cursor: pointer; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; transition: all 0.2s ease;
 }
-
 .header-btn:hover { 
-    background: #444; 
+    background: var(--gray-500); /* Variable statt #444 */
     color: white; 
-    border-color: #777;
+    border-color: var(--gray-300); /* Variable statt #777 */
 }
+.header-btn:active { transform: scale(0.95); }
 
-.header-btn:active {
-    transform: scale(0.95);
-}
-
-/* =========================================
-   SCROLLBAR STYLING (Global)
-   ========================================= */
+/* --- SCROLLBAR --- */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-color); }
-::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #666; }
+::-webkit-scrollbar-track { background: var(--bg-app); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
-/* =========================================
-   MAIN CONTAINER
-   ========================================= */
+/* --- MAIN LAYOUT --- */
 main {
-    flex: 1; 
-    display: flex; 
-    flex-direction: column;
-    width: 100%; 
-    max-width: 1400px;
-    margin: 0 auto; 
-    padding: 10px; /* Reduziert von 20px für mehr Platz auf Mobile */
-    box-sizing: border-box; 
-    overflow: hidden; /* Scrollen passiert im .screen */
-    position: relative;
+    flex: 1; display: flex; flex-direction: column;
+    /* Vereinheitlichung auf die max. Container-Breite der App + Puffer */
+    width: 100%; max-width: 1400px; margin: 0 auto; 
+    padding: var(--gap-sm); box-sizing: border-box; 
+    overflow: hidden; position: relative;
 }
 
 .screen { 
-    /* Screen füllt Main komplett aus */
-    flex-direction: column; 
-    width: 100%; 
-    height: 100%;
-    align-items: center; 
-    flex: 1;
-    overflow-y: auto; /* Hier wird gescrollt */
-    overflow-x: hidden;
-    padding-bottom: 20px; /* Puffer unten */
+    flex-direction: column; width: 100%; height: 100%;
+    align-items: center; flex: 1;
+    overflow-y: auto; overflow-x: hidden;
+    padding-bottom: var(--gap-lg);
 }
 
-/* Hue Status Indikatoren */
+/* Hue Widget */
 .hue-connected #hue-icon { filter: none; text-shadow: 0 0 10px #00ff00; }
 .hue-connected #hue-text { color: #00ff00; }
-
 .hue-error #hue-icon { filter: grayscale(100%); opacity: 0.5; }
-.hue-error #hue-text { color: #ff4444; }
-
+.hue-error #hue-text { color: var(--miss-color); }
 .hue-blink { animation: hue-pulse 1s infinite; }
-
-@keyframes hue-pulse {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; text-shadow: 0 0 15px yellow; }
-    100% { opacity: 0.5; }
-}
+@keyframes hue-pulse { 0% { opacity: 0.5; } 50% { opacity: 1; text-shadow: 0 0 15px yellow; } 100% { opacity: 0.5; } }

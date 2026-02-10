@@ -31,8 +31,7 @@ export const Game = {
             if(Keyboard.setATBLayout) Keyboard.setATBLayout();
         }
         else {
-            Keyboard.init();
-            Keyboard.setVisibleLayout(); 
+            if(Keyboard.setProLayout) Keyboard.setProLayout();
         }
         
         this.updateGameDisplay(); 
@@ -82,36 +81,28 @@ export const Game = {
      */
     _prepareTargetBox: function(mode) {
         const box = document.querySelector('.target-box');
-        // Die Standard X01 Elemente holen
         const standardEls = box.querySelectorAll('.target-row-main, .target-row-hint, .target-row-score, #turn-score-container');
         
-        // Cricket Container suchen oder erstellen
         let cricketContainer = document.getElementById('cricket-view-container');
         if (!cricketContainer) {
             cricketContainer = document.createElement('div');
             cricketContainer.id = 'cricket-view-container';
             cricketContainer.style.width = '100%';
-            cricketContainer.style.flex = '1'; // Platz ausfüllen
-            // Vor den Dart-Boxen einfügen
+            cricketContainer.style.flex = '1'; 
             const dartBox = document.getElementById('dart-display-container');
             box.insertBefore(cricketContainer, dartBox);
         }
 
         if (mode === 'cricket') {
-            // X01 Elemente verstecken
             standardEls.forEach(el => el.classList.add('hidden'));
-            // Cricket zeigen
             cricketContainer.classList.remove('hidden');
             cricketContainer.style.display = 'block';
         } else {
-            // X01 Elemente zeigen
             standardEls.forEach(el => el.classList.remove('hidden'));
-            // Cricket verstecken
             cricketContainer.classList.add('hidden');
             cricketContainer.style.display = 'none';
         }
         
-        // Dart Boxen IMMER anzeigen (außer Bob's 27 blendet sie selbst aus)
         const dbContainer = document.getElementById('dart-display-container');
         if(dbContainer) dbContainer.classList.remove('hidden');
         

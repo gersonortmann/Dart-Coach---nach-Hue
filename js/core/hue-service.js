@@ -363,23 +363,5 @@ export const HueService = {
         }
     },
 
-    _blinkRed: function(times) {
-        // Rekursive Funktion für manuelles Blinken
-        if (times <= 0) {
-            this.setMood('warm');
-            return;
-        }
-        // ROT AN
-        this._put(null, { on: true, ...COLORS.red, transitiontime: 3 });
-        
-        setTimeout(() => {
-            // AUS (oder dunkel)
-            this._put(null, { on: true, bri: 10, transitiontime: 3 });
-            setTimeout(() => {
-                this._blinkRed(times - 1);
-            }, 300);
-        }, 300);
-    },
-
     getConfig: () => _hueState
 };
