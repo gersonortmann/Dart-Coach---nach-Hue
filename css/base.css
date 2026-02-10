@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap');
+
+/* =========================================
+   BASE: Variables, Reset, Typography, Header
+   ========================================= */
+
+/* 1. Global Reset & Box Sizing */
+*, *::before, *::after {
+    box-sizing: border-box; /* WICHTIG: Padding vergrößert Elemente nicht mehr */
+}
+
+:root {
+    /* Core Colors */
+    --bg-color: #1e1e1e;
+    --panel-color: #2d2d2d;
+    
+    /* FIX: Gemini-Style Grau statt hartem Weiß */
+    --text-color: #e4e4e4;
+	
+    --accent-color: #00d26a; 
+    --highlight-color: #ffc107;
+    --miss-color: #ff4d4d;
+    
+    /* Keypad Colors (Logic grouping) */
+    --seg-single: #d1fae5;  /* Sehr helles Minz */
+    --seg-double: #6ee7b7;  /* Mittleres Smaragd */
+    --seg-triple: #34d399;  /* Intensives, aber helles Smaragd */
+    
+    --mod-double: #60a5fa; 
+    --mod-triple: #2563eb; 
+    
+	--bull-color: #fde047; 
+    
+    /* Game Specific */
+    --c40-3: #eab308; 
+    --c40-2: #22c55e; 
+    --c40-1: #3b82f6; 
+	
+	--btn-hit-bg: #6ee7b7;   /* Ein schönes, helles Smaragdgrün */
+    --btn-miss-bg: #fca5a5;  /* Ein weiches, aber klares Pastell-Rot */
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    
+    display: flex;
+    flex-direction: column;
+    
+    /* FIX: Nutze dvh für mobile Browser (Dynamic Viewport Height) */
+    height: 100vh;
+    height: 100dvh; 
+    
+    overflow: hidden; /* Scrollen nur in .screen Elementen erlauben */
+    
+    /* App-Feeling: Kein Text markieren, kein Tap-Highlight */
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Utility Classes */
+.hidden { display: none !important; }
+.active { display: flex !important; }
+
+/* =========================================
+   HEADER OPTIMIERUNG
+   ========================================= */
+header {
+    height: 60px; 
+    background-color: #000;
+    border-bottom: 2px solid var(--accent-color);
+    padding: 0 15px;
+    flex-shrink: 0;
+    z-index: 100;
+
+    /* FIX: CSS Grid statt Absolute Positioning */
+    display: grid;
+    /* 3 Spalten: Links (Rest) | Mitte (Inhalt) | Rechts (Rest) */
+    grid-template-columns: 1fr auto 1fr; 
+    align-items: center;
+}
+
+header h2 { 
+    font-size: 1.2rem; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    margin: 0; 
+    white-space: nowrap; /* Verhindert Umbruch des Titels */
+    justify-self: center; /* Zentriert den Titel exakt */
+    text-align: center;
+}
+
+/* Container-Anpassung für Grid */
+.header-left { 
+    display: flex; 
+    gap: 10px; 
+    justify-self: start; /* Links bündig */
+}
+
+.header-right { 
+    display: flex; 
+    gap: 10px; 
+    justify-self: end; /* Rechts bündig */
+}
+
+/* Header Buttons */
+.header-btn {
+    background: #333; 
+    color: #ccc; 
+    border: 1px solid #555;
+    padding: 0 12px; /* Etwas kompakter */
+    border-radius: 6px; 
+    cursor: pointer; 
+    height: 36px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    font-size: 1rem; 
+    transition: all 0.2s ease;
+}
+
+.header-btn:hover { 
+    background: #444; 
+    color: white; 
+    border-color: #777;
+}
+
+.header-btn:active {
+    transform: scale(0.95);
+}
+
+/* =========================================
+   SCROLLBAR STYLING (Global)
+   ========================================= */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-color); }
+::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #666; }
+
+/* =========================================
+   MAIN CONTAINER
+   ========================================= */
+main {
+    flex: 1; 
+    display: flex; 
+    flex-direction: column;
+    width: 100%; 
+    max-width: 1400px;
+    margin: 0 auto; 
+    padding: 10px; /* Reduziert von 20px für mehr Platz auf Mobile */
+    box-sizing: border-box; 
+    overflow: hidden; /* Scrollen passiert im .screen */
+    position: relative;
+}
+
+.screen { 
+    /* Screen füllt Main komplett aus */
+    flex-direction: column; 
+    width: 100%; 
+    height: 100%;
+    align-items: center; 
+    flex: 1;
+    overflow-y: auto; /* Hier wird gescrollt */
+    overflow-x: hidden;
+    padding-bottom: 20px; /* Puffer unten */
+}
+
+/* Hue Status Indikatoren */
+.hue-connected #hue-icon { filter: none; text-shadow: 0 0 10px #00ff00; }
+.hue-connected #hue-text { color: #00ff00; }
+
+.hue-error #hue-icon { filter: grayscale(100%); opacity: 0.5; }
+.hue-error #hue-text { color: #ff4444; }
+
+.hue-blink { animation: hue-pulse 1s infinite; }
+
+@keyframes hue-pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; text-shadow: 0 0 15px yellow; }
+    100% { opacity: 0.5; }
+}

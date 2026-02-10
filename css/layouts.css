@@ -1,0 +1,365 @@
+/* =========================================
+   LAYOUTS
+   Struktur der Screens: Dashboard, Setup, Mgmt
+   ========================================= */
+
+/* --------------------------------------------------
+   1. DASHBOARD GRID (Startseite)
+   -------------------------------------------------- */
+
+.dashboard-grid {
+    display: grid;
+    /* Mobile First: 1 Spalte untereinander */
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+	min-height: 120px;
+    max-width: 800px; /* Etwas schmaler, sieht bei 2 Spalten besser aus */
+    margin: 20px auto 0 auto;
+}
+
+/* Ab Tablet/Desktop: Exakt 2 Spalten */
+@media (min-width: 600px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+
+/* --------------------------------------------------
+   SPEZIAL-LAYOUT: SPIELAUSWAHL (Game Selector)
+   -------------------------------------------------- */
+
+#game-selector-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Mobile: Alles untereinander */
+    gap: 20px;
+    padding-bottom: 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.game-card {
+    height: 100%;       /* Füllt die Grid-Zelle komplett aus */
+    min-height: 120px;  /* Mindesthöhe für Einheitlichkeit */
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 15px;
+    box-sizing: border-box;
+    /* Damit der Inhalt nicht springt */
+    flex-direction: row; 
+    gap: 15px;
+}
+
+/* Ab Desktop (900px) bauen wir deine Pyramide */
+@media (min-width: 900px) {
+    #game-selector-grid {
+        /* 6 Spalten Raster für maximale Flexibilität */
+        grid-template-columns: repeat(6, 1fr);
+    }
+
+    /* Standard: Jede Karte ist 2 Spalten breit (1/3 der Breite) */
+    #game-selector-grid .dashboard-card {
+        grid-column: span 2;
+    }
+
+    /* --- POSITIONIERUNG --- */
+    /* Wir nutzen die ID (#game-selector-grid) davor, damit die Regel stärker ist! */
+
+    /* ZEILE 1: Warmup (Mittig) */
+    #game-selector-grid .game-card-warmup {
+        grid-row: 1;
+        grid-column: 3 / span 2; /* Mitte (Spalte 3+4) */
+    }
+
+    /* ZEILE 2: ATC, Single, Shanghai */
+    #game-selector-grid .game-card-aroundclock {
+        grid-row: 2;
+        grid-column: 1 / span 2; /* Links */
+    }
+    #game-selector-grid .game-card-singletraining {
+        grid-row: 2;
+        grid-column: 3 / span 2; /* Mitte */
+    }
+    #game-selector-grid .game-card-shanghai {
+        grid-row: 2;
+        grid-column: 5 / span 2; /* Rechts */
+    }
+
+    /* ZEILE 3: Catch40, Bob's 27 (Zentriert versetzt) */
+    #game-selector-grid .game-card-catch40 {
+        grid-row: 3;
+        grid-column: 2 / span 2; /* Halb Links (Spalte 2+3) */
+    }
+    #game-selector-grid .game-card-bobs27 {
+        grid-row: 3;
+        grid-column: 4 / span 2; /* Halb Rechts (Spalte 4+5) */
+    }
+
+    /* ZEILE 4: X01 (Mittig & Hervorgehoben) */
+    #game-selector-grid .game-card-x01 {
+        grid-row: 4;
+        grid-column: 3 / span 2; /* Mitte */
+        
+        /* Optional: X01 etwas hervorheben */
+        border-color: var(--accent-color);
+        background: linear-gradient(145deg, var(--panel-color), #1a2e24);
+        box-shadow: 0 4px 20px rgba(0, 210, 106, 0.15);
+    }
+}
+
+
+/* --------------------------------------------------
+   2. MATCH SETUP SCREEN
+   -------------------------------------------------- */
+
+.setup-header-row {
+    display: flex; justify-content: center; align-items: center; 
+    position: relative; width: 100%; max-width: 1000px; margin-bottom: 15px;
+}
+.setup-header-row h3 { margin: 0; }
+
+/* Badge oben rechts (z.B. "X01") */
+.setup-game-badge {
+    position: absolute; right: 0;
+    background: #252525; padding: 5px 15px; border-radius: 20px;
+    border: 1px solid var(--accent-color); color: var(--accent-color); font-weight: bold;
+    font-size: 0.8rem;
+}
+
+.setup-main-container {
+    display: flex; flex-direction: column; gap: 20px;
+    width: 100%; max-width: 1000px; margin: 0 auto;
+}
+
+/* Zeile 1: Spieler Auswahl (Pool & Lineup) */
+.setup-row-players {
+    display: grid; 
+    grid-template-columns: 1fr; /* Mobile: Untereinander */
+    gap: 20px;
+    /* Wichtig: Fixe Höhe, damit Listen scrollen können */
+    height: 200px; 
+    min-height: 170px;
+}
+
+/* Desktop: Nebeneinander */
+@media (min-width: 768px) {
+    .setup-row-players {
+        grid-template-columns: 1fr 1fr; 
+    }
+}
+
+/* Die Spalten selbst */
+.setup-col {
+    background: var(--panel-color); 
+    border: 1px solid #444; border-radius: 10px; 
+    padding: 15px; 
+    
+    /* Flex Layout für Header + Scrollbare Liste */
+    display: flex; flex-direction: column; 
+    overflow: hidden; 
+}
+.setup-col.active-col { 
+    border-color: #666; background: #262626; 
+}
+
+.col-header {
+    flex-shrink: 0; /* Header darf nicht schrumpfen */
+    font-size: 0.9rem; text-transform: uppercase; color: #888; letter-spacing: 1px;
+    margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+/* Die scrollbare Liste im Setup */
+.player-list-scrollable { 
+    flex: 1; /* Füllt den Rest der Spalte */
+    overflow-y: auto; /* Scrollt bei Bedarf */
+    padding-right: 5px; 
+}
+/* Scrollbar Styling für Setup Liste */
+.player-list-scrollable::-webkit-scrollbar { width: 5px; }
+.player-list-scrollable::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+
+/* Zeile 2: Optionen Container */
+.setup-row-options {
+    background: var(--panel-color); border: 1px solid #444;
+    border-radius: 10px; padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Option Groups (Start Score, Mode...) */
+.opt-group-big { margin-bottom: 20px; }
+.opt-label-big { 
+    display: block; color: #888; font-size: 0.8rem; 
+    text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px;
+}
+
+.opt-row-big { 
+    display: flex; gap: 10px; flex-wrap: wrap; 
+}
+.opt-switch-row-big { 
+    display: flex; gap: 15px; width: 100%; 
+}
+
+
+/* --------------------------------------------------
+   3. MANAGEMENT SCREEN
+   -------------------------------------------------- */
+
+.mgmt-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    
+    /* Optimierung: Füllt den verfügbaren Platz im Screen */
+    flex: 1; 
+    min-height: 0; /* Wichtig für Flexbox-Scrolling */
+}
+
+/* Desktop: Panels nebeneinander */
+@media (min-width: 768px) {
+    .mgmt-container {
+        flex-direction: row; 
+    }
+}
+
+/* Die Karten (Links Liste / Rechts Details) */
+.mgmt-card {
+    background: var(--panel-color);
+    border: 1px solid #444;
+    border-radius: 15px;
+    padding: 20px;
+    
+    display: flex; flex-direction: column;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.mgmt-list-panel {
+    flex: 1; /* 1/3 Breite auf Desktop */
+    min-width: 280px;
+    overflow: hidden; /* Damit interne Liste scrollt */
+}
+
+.mgmt-details-panel {
+    flex: 2; /* 2/3 Breite auf Desktop */
+    overflow: hidden;
+    opacity: 1; transition: opacity 0.2s;
+}
+
+/* Unsichtbares Panel Helper */
+.hidden-panel { opacity: 0.5; pointer-events: none; }
+
+/* Interne Struktur Management */
+.mgmt-header-action {
+    border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; flex-shrink: 0;
+}
+.mgmt-section { margin-bottom: 20px; flex-shrink: 0; }
+
+.mgmt-header-action label, .mgmt-section label, .list-label {
+    display: block; color: #888; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+}
+
+/* Scrollbare Bereiche im Management */
+.scroll-list {
+    flex: 1; overflow-y: auto; padding-right: 5px;
+}
+.history-list-container {
+    flex: 1; overflow-y: auto;
+    border-top: 1px solid #444; padding-top: 15px;
+}
+
+/* Scrollbars */
+.scroll-list::-webkit-scrollbar, .history-list-container::-webkit-scrollbar { width: 5px; }
+.scroll-list::-webkit-scrollbar-thumb, .history-list-container::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+.empty-state-text {
+    text-align: center; color: #666; margin-top: 30px; font-style: italic;
+}
+
+
+/* --------------------------------------------------
+   4. STATS LAYOUT
+   -------------------------------------------------- */
+.stats-container-width { 
+    width: 100%; max-width: 1400px; margin: 0 auto; 
+    display: flex; flex-direction: column; gap: 20px;
+}
+
+.stats-filter-row { 
+    display: flex; flex-direction: row; gap: 10px; width: 100%; 
+}
+
+.chart-container { 
+    background: #2d2d2d; padding: 20px; border-radius: 15px; 
+    border: 1px solid #444; box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
+    width: 100%; box-sizing: border-box;
+    /* Höhe definieren für Chart.js */
+    height: 300px; position: relative;
+}
+
+@media (max-width: 600px) {
+    .stats-filter-row { flex-direction: column; }
+}
+
+/* --- RESULT SCREEN 3-SPALTEN LAYOUT --- */
+
+.grid-triple-result {
+    display: grid;
+    /* Die Magie: 2 Teile, 2 Teile, 1 Teil */
+    grid-template-columns: 2fr 2fr 1fr; 
+    gap: 20px;
+    width: 100%;
+    margin-bottom: 20px;
+    /* Damit alle Kinder gleich hoch gezogen werden */
+    align-items: stretch; 
+}
+
+/* Anpassung der inneren Container für dieses Layout */
+.grid-triple-result .chart-wrapper-big,
+.grid-triple-result .heatmap-container,
+.grid-triple-result .score-distribution {
+    /* WICHTIG: Identische fixe Höhe erzwingen */
+    height: 400px !important; 
+    min-height: 400px !important;
+    margin: 0 !important; /* Margins vom Grid steuern lassen */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Chart Canvas Positionierung fixen */
+.grid-triple-result .chart-wrapper-big canvas {
+    max-height: 350px;
+}
+
+/* Heatmap SVG soll nicht riesig werden, sondern passen */
+.grid-triple-result .heatmap-container .dartboard-svg {
+    max-height: 320px;
+    width: auto;
+}
+
+/* Power Scores schön verteilen */
+.grid-triple-result .score-distribution {
+    justify-content: flex-start; /* Oben bündig starten */
+    padding-top: 30px;
+}
+
+/* MOBILE RESPONSIVE: Untereinander stapeln */
+@media (max-width: 1100px) {
+    .grid-triple-result {
+        grid-template-columns: 1fr; /* Alles untereinander */
+        height: auto;
+    }
+    .grid-triple-result .chart-wrapper-big,
+    .grid-triple-result .heatmap-container,
+    .grid-triple-result .score-distribution {
+        height: 350px !important; /* Etwas kleiner auf Mobile */
+        min-height: 350px !important;
+    }
+}

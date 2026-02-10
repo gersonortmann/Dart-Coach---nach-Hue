@@ -1,0 +1,852 @@
+/* =========================================
+   GAME: Scoreboard, Darts, Keypad, Results
+   ========================================= */
+
+/* Container für den aktiven Screen */
+#screen-game {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    /* Wichtig für vertikale Zentrierung im Desktop Mode */
+    height: 100%; 
+    padding-bottom: 20px;
+    box-sizing: border-box;
+}
+
+/* --------------------------------------------------
+   1. HEADER & SCOREBOARD (Oben)
+   -------------------------------------------------- */
+
+.game-header-area { 
+    width: 100%; 
+    text-align: center; 
+    margin-bottom: 15px; 
+    margin-top: 10px;
+    flex-shrink: 0; 
+}
+
+.active-player-big { 
+    font-size: 2rem; font-weight: 800; color: #e4e4e4; 
+    margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.player-score-small { 
+    font-size: 1.4rem; color: #e4e4e4; 
+    font-weight: bold; margin-bottom: 5px; 
+}
+.round-info-small { font-size: 1rem; color: inherit; }
+
+#multiplayer-scoreboard {
+    display: flex; justify-content: center; gap: 10px;
+    margin-top: 15px; flex-wrap: wrap;
+}
+.player-mini-card {
+    background: rgba(255,255,255,0.05); border: 1px solid #444;
+    border-radius: 8px; padding: 5px 10px; min-width: 80px; text-align: center;
+}
+.mini-name { font-size: 0.75rem; color: #aaa; margin-bottom: 2px; }
+.mini-score { font-size: 1.1rem; font-weight: bold; color: #e4e4e4; }
+.mini-legs { font-size: 0.7rem; color: #666; }
+
+
+/* --------------------------------------------------
+   2. TARGET BOX (Die große Zahl)
+   -------------------------------------------------- */
+
+.target-box {
+	background-color: var(--panel-color); 
+    padding: 20px; border-radius: 20px;
+    text-align: center; border: 1px solid #444; 
+    width: 100%; max-width: 500px; 
+    
+    /* FIX Mobile Höhe: Deutlich vergrößert (400px), damit es nicht gequetscht wirkt */
+    min-height: 400px; 
+    margin-bottom: 20px;
+    
+    /* Flexbox für interne vertikale Zentrierung der Inhalte */
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4); 
+}
+
+.target-row-main { margin-bottom: 10px; width: 100%; }
+.target-row-hint { min-height: 35px; width: 100%; margin-bottom: 10px; display: flex; justify-content: center; align-items: center;}
+.target-row-score { min-height: 40px; width: 100%; margin-bottom: 15px; }
+
+.target-value { 
+    font-size: 8rem; color: var(--highlight-color); font-weight: bold; 
+    line-height: 1; font-variant-numeric: tabular-nums;
+}
+.target-label { 
+    color: #888; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 5px;
+}
+.checkout-hint { 
+    color: var(--accent-color); font-size: 1.3rem; font-weight: bold; 
+    background: rgba(0, 210, 106, 0.1); padding: 5px 15px; border-radius: 15px; display: inline-block;
+}
+.bust-flash { color: var(--miss-color) !important; animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+
+
+/* --------------------------------------------------
+   3. DART ANZEIGE & KEYPAD BASIS
+   -------------------------------------------------- */
+.dart-display-row { 
+    display: flex; gap: 10px; justify-content: center; 
+    margin-top: 10px; height: 60px; width: 100%; margin-bottom: 20px;
+}
+.dart-val-box { 
+    flex: 1; max-width: 80px; height: 60px;
+    background: #222; border: 2px solid #444; border-radius: 10px; 
+    display: flex; align-items: center; justify-content: center; 
+    font-weight: bold; font-size: 1.5rem; color: #555;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); transition: all 0.1s;
+}
+.dart-val-box.filled { background: #333; border-color: var(--accent-color); color: var(--accent-color); box-shadow: 0 0 15px rgba(0, 210, 106, 0.1); }
+.dart-val-box.is-miss { color: var(--miss-color) !important; border-color: var(--miss-color) !important; background: rgba(255, 77, 77, 0.1); }
+
+.keypad-grid { display: grid; width: 100%; max-width: 500px; gap: 10px; }
+.key-btn { 
+    min-height: 70px; border: none; border-radius: 10px; 
+    font-size: 1.2rem; font-weight: bold; cursor: pointer;
+	color: #000 !important;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.3); transition: transform 0.05s, box-shadow 0.05s;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+}
+.key-btn:active { transform: translateY(4px); box-shadow: 0 0 0 rgba(0,0,0,0); }
+
+/* Farben */
+/* S/D/T Buttons */
+.hit-1, .seg-single { background: var(--seg-single); } 
+.hit-2, .seg-double { background: var(--seg-double); } 
+.hit-3, .seg-triple { background: var(--seg-triple); }
+
+/* HIT / Treffer Button (ATC, Warmup) - "Catch-All" Selektor */
+.atc-hit, .hit-btn, .btn-hit, .hit { 
+    background: var(--btn-hit-bg) !important; 
+    color: #000 !important; 
+    border-color: var(--btn-hit-bg) !important; /* Nimmt auch den Rand mit */
+}
+
+/* MISS / Kein Treffer Button - "Catch-All" Selektor */
+.atc-miss, .miss, .miss-btn, .btn-miss, .miss { 
+    background: var(--btn-miss-bg) !important; 
+    color: #000 !important; 
+    border-color: var(--btn-miss-bg) !important;
+}
+
+/* Catch 40 Farben */
+.c40-3 { background: var(--c40-3); } 
+.c40-2 { background: var(--c40-2); } 
+.c40-1 { background: var(--c40-1); }
+
+/* Bull Button */
+.bull-layout .bull-btn { background: var(--bull-color); color: #000 !important; }
+
+/* --------------------------------------------------
+   PRO KEYPAD (Mobile Basis)
+   -------------------------------------------------- */
+.keypad-pro-grid { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 8px; }
+.mod-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px; }
+.mod-btn { 
+    /* Standard-Zustand (Inaktiv) */
+    background-color: #444 !important; /* !important zwingt ihn auf Grau zurück */
+    color: #000 !important; 
+    height: 55px; 
+    font-size: 1.2rem; 
+    font-weight: bold;
+    text-transform: uppercase; letter-spacing: 1px;
+    border: 1px solid rgba(0,0,0,0.05);
+    outline: none; /* Entfernt den blauen Rahmen beim Klicken */
+    transition: background-color 0.2s; /* Weicher Übergang */
+}
+.mod-double { border-bottom: 4px solid var(--mod-double); } .mod-triple { border-bottom: 4px solid var(--mod-triple); }
+.active-mod.mod-double { background: var(--mod-double); } .active-mod.mod-triple { background: var(--mod-triple);}
+.num-grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.num-btn { height: 55px; color: black; background: #e0e0e0; font-size: 1.3rem; }
+.num-btn:nth-child(even) { background: #c0c0c0; }
+.mode-double .num-btn { background: var(--mod-double) !important; border: 1px solid rgba(255,255,255,0.3); }
+.mode-triple .num-btn { background: var(--mod-triple) !important; border: 1px solid rgba(255,255,255,0.3); }
+.bottom-row-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 0.8fr; gap: 6px; margin-top: 5px; }
+.bull-btn { background: var(--bull-color); font-size: 0.9rem; line-height: 1.1; }
+#btn-pro-back { background: #333; color:black !important; font-size: 1.5rem; }
+
+/* NEU: ATC Grid Layout */
+.keypad-atc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    height: 220px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.atc-hit {
+    grid-column: 1 / 4; /* Spalte 1 bis Ende */
+    background: var(--seg-triple) !important;
+    color: black !important;
+    font-size: 1.5rem !important;
+    font-weight: 900 !important;
+}
+
+.atc-miss {
+    grid-column: 1 / 3; /* Spalte 1 und 2 */
+    background: var(--btn-miss-bg) !important;
+    color: black !important;
+    font-size: 1.2rem !important;
+}
+
+.atc-undo {
+    grid-column: 3 / 4; /* Letzte Spalte */
+    background: #555 !important;
+    color: black !important;
+    font-size: 1.5rem !important;
+}
+
+
+/* --------------------------------------------------
+   FIX DESKTOP LAYOUT (Split Screen & Zentrierung)
+   -------------------------------------------------- */
+@media (min-width: 1024px) {
+    #screen-game.active {
+        display: grid !important; 
+        grid-template-columns: 1fr 1fr; 
+        /* Rows auf auto, damit align-content greift */
+        grid-template-rows: auto auto; 
+        gap: 40px; 
+        
+        /* Stretch: Sorgt dafür, dass linke Spalte (Target) und rechte Spalte (Container) gleich hoch sind */
+        align-items: stretch; 
+        justify-items: center;
+        
+        /* Vertikale Zentrierung des gesamten Blocks */
+        align-content: center;
+
+        max-width: 1200px; margin: 0 auto;
+        height: 100%; 
+    }
+
+    .game-header-area { 
+        grid-column: 1 / -1; grid-row: 1;
+        background: #252525; padding: 15px; border-radius: 15px; border: 1px solid #444; 
+        width: 100%; max-width: 800px; display: flex; justify-content: space-around; align-items: center;
+        align-self: center; /* Header bleibt zentriert */
+    }
+
+    /* Target Box (Links) */
+    .target-box { 
+        grid-column: 1; grid-row: 2; 
+        height: auto; 
+        /* Mindesthöhe erhöht (520px), damit es optisch zur Pro-Tastatur passt */
+        min-height: 520px; 
+        justify-self: end; margin: 0;
+    }
+    .target-value { font-size: 8rem; } 
+
+    /* --- KEYPAD HANDLING --- */
+
+    /* PRO KEYPAD: Soll die Höhe füllen (Wachstum!) */
+    .keypad-pro-grid { 
+        grid-column: 2; grid-row: 2; 
+        justify-self: start; margin-top: 0;
+        height: 100%; 
+        /* Verteilt den Platz auf Modifier, Numbers, Bottom */
+        justify-content: space-between; 
+    }
+
+    /* Das Herzstück: Zahlenfeld wächst und füllt die Lücke zur Targetbox-Höhe */
+    .keypad-pro-grid .num-grid-container {
+        flex: 1; /* Nimm den restlichen Platz! */
+        margin: 10px 0;
+        /* Die 4 Reihen teilen sich den Platz gleichmäßig */
+        grid-template-rows: repeat(4, 1fr);
+    }
+    
+    /* Tasten im Zahlenfeld füllen ihre Zellen */
+    .keypad-pro-grid .num-btn {
+        height: 100%; 
+        min-height: 0; /* Override */
+    }
+
+    /* SIMPLE KEYPADS (Warmup, ATC): 
+       Sollen NICHT gestreckt werden, sondern mittig schweben */
+    .keypad-grid {
+        grid-column: 2; grid-row: 2;
+        justify-self: start; 
+        margin-top: 0;
+        
+        /* WICHTIG: Keine 100% Höhe, sondern Auto -> Kompakt bleiben */
+        height: auto; 
+        /* WICHTIG: Vertikale Zentrierung in der rechten Spalte */
+        align-self: center; 
+    }
+    
+    /* Buttons auf Desktop für beide etwas größer, aber fixe Höhe für Simple Keypads */
+    .keypad-grid .key-btn {
+        height: 90px; 
+    }
+    
+    /* Pro Keypad Tasten (Mod & Bottom) bekommen auch fixe Mindesthöhe */
+    .keypad-pro-grid .mod-btn,
+    .keypad-pro-grid .key-btn { 
+        min-height: 70px; font-size: 1.4rem; 
+    }
+}
+
+@keyframes shake { 
+    0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } 
+}
+
+/* --------------------------------------------------
+   Ergebnisseite
+   -------------------------------------------------- */
+   
+.result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.result-card {
+    background: var(--panel-color);
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.result-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.winner-card {
+    border-left: 5px solid var(--accent-color);
+}
+
+.card-player-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: var(--text-color);
+}
+
+.stats-row-main {
+    display: flex;
+    justify-content: space-around;
+    background: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.stat-item { text-align: center; }
+.stat-item small { color: #888; font-size: 0.7rem; text-transform: uppercase; }
+.stat-item .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--highlight-color); }
+
+.stats-row-sub {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.details-panel {
+    margin-top: 25px;
+    padding: 15px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    width: 100%;
+}
+
+.details-grid-mini {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.detail-box {
+    background: #333;
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid #444;
+}
+
+.detail-box.hit { border-color: var(--accent-color); color: var(--accent-color); }
+.detail-box.miss { opacity: 0.5; }
+.detail-box small { font-size: 0.65rem; color: #888; display: block; }
+
+/* Heatmap Styling */
+.heatmap-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.2);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 20px 0;
+    min-height: 350px;
+}
+
+.dartboard-svg {
+    max-width: 100%;
+    height: auto;
+    filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+}
+
+/* Grundfarben der Segmente */
+.db-single { fill: #222; stroke: #333; stroke-width: 0.5; }
+.db-double, .db-triple { fill: #111; stroke: #333; stroke-width: 0.5; }
+.db-bull { fill: #222; stroke: #333; }
+.db-bullseye { fill: #111; stroke: #333; }
+
+/* Heatmap Glow Klassen - werden per JS vergeben */
+.heat-low    { fill: rgba(0, 210, 106, 0.2) !important; }
+.heat-medium { fill: rgba(0, 210, 106, 0.5) !important; stroke: var(--accent-color); }
+.heat-high   { fill: var(--accent-color) !important; filter: drop-shadow(0 0 5px var(--accent-color)); }
+
+/* --- MANAGEMENT DASHBOARD --- */
+
+.mgmt-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr; /* Links schmaler, Rechts breit */
+    gap: 30px;
+    height: calc(100vh - 140px); /* Füllt den Screen abzüglich Header */
+    min-height: 500px;
+}
+
+/* Linke Spalte: Spieler Liste */
+.mgmt-sidebar {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.mgmt-add-box {
+    padding: 20px;
+    border-bottom: 1px solid #333;
+    background: rgba(0,0,0,0.2);
+}
+
+.mgmt-player-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.mgmt-player-card {
+    padding: 15px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+.mgmt-player-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.mgmt-player-card.active {
+    background: rgba(0, 210, 106, 0.1);
+    border-color: var(--accent-color);
+    color: #fff;
+}
+
+/* Rechte Spalte: Content */
+.mgmt-content {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid #333;
+    padding: 30px;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* History List Styling */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.history-item {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr auto; /* Datum | Spiel | Ergebnis | Löschen */
+    align-items: center;
+    background: rgba(0,0,0,0.2);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    transition: background 0.2s;
+}
+
+.history-item:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.btn-delete-icon {
+    background: none; border: none;
+    color: #666;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px;
+    transition: color 0.2s;
+}
+.btn-delete-icon:hover { color: #ff4444; transform: scale(1.1); }
+
+/* Input Styling im Dark Mode */
+.inp-mgmt {
+    width: 100%;
+    background: #222;
+    border: 1px solid #444;
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+.inp-mgmt:focus { outline: none; border-color: var(--accent-color); }
+
+@media (max-width: 900px) {
+    .mgmt-grid { grid-template-columns: 1fr; height: auto; }
+    .mgmt-sidebar { max-height: 400px; }
+    .history-item { grid-template-columns: 1fr auto; gap: 5px; } /* Simplere Ansicht auf Mobile */
+}
+
+/* Filter Dropdown im Header */
+.mgmt-filter-select {
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    outline: none;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.mgmt-filter-select:hover {
+    border-color: #666;
+}
+
+.mgmt-filter-select:focus {
+    border-color: var(--accent-color);
+}
+
+.training-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+/* =========================================
+   GAME ANIMATIONS (MISS, BUST, CHECK)
+   ========================================= */
+
+/* 1. MISS: Soll wehtun (Rot, Shake, Ghost-Effekt) */
+.anim-miss {
+    color: var(--miss-color) !important; /* Rot erzwingen */
+    font-size: 6rem; /* Etwas kleiner als die Zahl, damit es reinpasst */
+    text-shadow: 0 0 20px rgba(255, 77, 77, 0.5); /* Rotes Glühen */
+    animation: miss-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes miss-pop {
+    0% { transform: scale(0.8); opacity: 0; }
+    40% { transform: scale(1.1) rotate(-5deg); opacity: 1; }
+    60% { transform: scale(1.1) rotate(5deg); }
+    80% { transform: scale(1.1) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+/* 2. BUST: Ähnlich wie Miss, aber "kaputter" (Glitch-Artig) */
+.anim-bust {
+    color: #ff4444 !important;
+    text-shadow: 2px 2px 0px #000;
+    animation: bust-shake 0.5s ease-in-out both;
+}
+
+@keyframes bust-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+}
+
+/* 3. CHECK: Der Belohnungs-Moment (Grün, Zoom, Strahlen) */
+.anim-check {
+    color: var(--accent-color) !important; /* Grün */
+    text-shadow: 0 0 30px var(--accent-color);
+    animation: check-zoom 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+}
+
+@keyframes check-zoom {
+    0% { transform: scale(0.2); opacity: 0; }
+    60% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* =========================================
+   RESULT SCREEN: WINNER SHOWCASE
+   ========================================= */
+
+.winner-showcase {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0 0 0;
+    text-align: center;
+}
+
+/* Die schwebende Krone */
+.winner-crown {
+    font-size: 5rem;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.6)); /* Goldener Schein */
+    animation: crown-float 3s ease-in-out infinite;
+}
+
+@keyframes crown-float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+}
+
+.badge-sdt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    font-size: 0.7rem; font-weight: bold;
+    color: #000;
+    margin-left: 2px;
+}
+.bg-s { background-color: var(--seg-single); }
+.bg-d { background-color: var(--seg-double); }
+.bg-t { background-color: var(--seg-triple); }
+
+/* Ergebnis Farben */
+.res-win { color: var(--accent-color); font-weight: bold; }
+.res-loss { color: var(--miss-color); }
+.res-solo { color: #888; font-style: italic; }
+
+/* Der Name des Siegers */
+.winner-name {
+    font-family: 'Permanent Marker', cursive; /* Deine Wahl! */
+    font-size: 2.5rem;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    line-height: 1.1;
+    margin: 5px 0;
+}
+
+/* Der Untertitel (Punkte oder "Winner") */
+.winner-sub {
+    font-size: 1.5rem;
+    color: var(--accent-color);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 5px;
+}
+
+/* Anpassung für X01 (falls wir es kompakter wollen) */
+.winner-showcase.compact .winner-crown { font-size: 3rem; }
+.winner-showcase.compact .winner-name { font-size: 2.5rem; }
+
+/* =========================================
+   X01 STATS LAYOUT (Special Grid)
+   ========================================= */
+
+.grid-x01-layout {
+    display: grid;
+    /* Spalte 1 (Graph): 50% | Spalte 2 (Heatmap): 30% | Spalte 3 (Scores): 20% */
+    grid-template-columns: 2.03fr 1.27fr 0.7fr; 
+    gap: 20px;
+    margin-bottom: 20px;
+    align-items: start; /* Damit oben bündig */
+}
+
+/* Anpassung für kleinere Screens */
+@media (max-width: 1200px) {
+    .grid-x01-layout {
+        grid-template-columns: 1fr 1fr; /* Graph oben, Rest unten geteilt */
+    }
+    .grid-x01-layout .chart-wrapper-big {
+        grid-column: 1 / -1; /* Graph nimmt volle Breite */
+        height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .grid-x01-layout {
+        grid-template-columns: 1fr; /* Alles untereinander */
+    }
+}
+
+/* =========================================
+   CRICKET SPECIFICS
+   ========================================= */
+
+/* --- TACTICAL BOARD --- */
+.cricket-board {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 600px;
+    background: #252525;
+    border: 1px solid #444;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* Header Zeile (Spielernamen) */
+.cricket-header {
+    display: grid;
+    /* Spalten werden per JS gesetzt, je nach Spieleranzahl */
+    background: #1a1a1a;
+    border-bottom: 2px solid #333;
+    min-height: 50px;
+}
+
+.c-player-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border-right: 1px solid #333;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #888;
+    position: relative;
+    overflow: hidden;
+}
+
+.c-player-header.active {
+    background: rgba(0, 210, 106, 0.1); /* Grünlicher Hintergrund */
+    color: var(--accent-color);
+    box-shadow: inset 0 -3px 0 var(--accent-color); /* Unterstrich */
+}
+
+.c-score-big {
+    font-size: 1.4rem;
+    color: #fff;
+    margin-top: 2px;
+}
+
+/* Die Zeilen (20, 19, ... Bull) */
+.cricket-row {
+    display: grid;
+    border-bottom: 1px solid #333;
+    min-height: 45px;
+}
+.cricket-row:last-child { border-bottom: none; }
+
+/* Wenn eine Zahl komplett zu ist (Greyed out) */
+.cricket-row.closed-row {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(0,0,0,0.2),
+        rgba(0,0,0,0.2) 10px,
+        rgba(0,0,0,0.3) 10px,
+        rgba(0,0,0,0.3) 20px
+    );
+    opacity: 0.6;
+}
+
+/* Target Zelle (Mitte) */
+.c-target-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 1.2rem;
+    color: var(--accent-color);
+    background: #202020;
+    border-left: 1px solid #333;
+    border-right: 1px solid #333;
+}
+.closed-row .c-target-cell { color: #666; }
+
+/* Mark Zellen */
+.c-mark-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #333;
+    position: relative;
+}
+.c-mark-cell.active-col {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* --- MARKS (SVG Shapes) --- */
+.mark-svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 3;
+    stroke-linecap: round;
+    fill: none;
+    stroke: #eee; /* Standard Weiß */
+}
+/* Farbe für den aktiven Spieler (wird per JS gesetzt oder CSS Class) */
+.active .mark-svg { stroke: var(--accent-color); }
+
+/* --- KEYPAD CRICKET --- */
+#keypad-cricket {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 0.8fr; /* 4 Spalten Layout für Unten */
+    gap: 10px;
+    width: 100%;
+    max-width: 500px;
+}
+
+/* Spezifische Bereiche im Grid */
+.kp-mod-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.kp-nums {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr; /* 15, 16, 17 */
+    gap: 8px;
+}
+
+/* =========================================
+   KEYPAD MODIFIER FEEDBACK
+   ========================================= */
+
+/* Wenn Double aktiv ist, werden die Zahlen-Tasten hellblau */
+.num-btn.mod-active-d {
+    background-color: var(--mod-double) !important;
+    color: #000 !important;
+}
+
+/* Wenn Triple aktiv ist, werden die Zahlen-Tasten dunkelblau */
+.num-btn.mod-active-t {
+    background-color: var(--mod-triple) !important;
+    color: #000 !important;
+}
