@@ -16,7 +16,6 @@ export const X01 = {
     initPlayer: function(player, settings, targets) {
         const startScore = parseInt(targets[0]); 
         player.currentResidual = startScore;
-        // Wichtig: Existierende Stats nicht überschreiben beim ResetLeg
         if (player.legsWon === undefined) player.legsWon = 0;
         if (player.setsWon === undefined) player.setsWon = 0;
         
@@ -25,39 +24,34 @@ export const X01 = {
     },
 
     /**
-     * NEU: Die Haupt-Logik für Input
+     * Step 7a: Empfängt jetzt ein universelles Dart-Objekt statt String.
+     * dart.points, dart.multiplier, dart.segment – alles direkt verfügbar.
      */
-    handleInput: function(session, player, inputVal) {
+    handleInput: function(session, player, dart) {
         const settings = session.settings;
-        const result = this._processThrow(player, inputVal, settings); // Interne Berechnung
+        const result = this._processThrow(player, dart, settings);
 
-        // Dart speichern
-        session.tempDarts.push({ val: inputVal, points: result.points });
+        // Dart speichern: points = angerechnete Punkte (0 bei Bust/Double-In-Miss)
+        session.tempDarts.push({ ...dart, points: result.points });
         
         // --- FALL 1: BUST ---
         if (result.status === 'BUST') {
-            // Reset Score auf Anfang der Aufnahme
             player.currentResidual = player.startOfTurnResidual;
-            
-            // Turn History schreiben
             this._logTurn(player, session, { bust: true });
 
             return { 
 				action: 'BUST', 
-				overlay: { text: 'BUST', type: 'bust' } // TYPE 'bust' statt 'miss'
+				overlay: { text: 'BUST', type: 'bust' }
 			};
         }
 
         // --- FALL 2: MATCH/LEG WIN ---
         if (result.status === 'WIN') {
-            // Turn History schreiben (Leg Finish)
             this._logTurn(player, session, { isLegFinish: true });
-            
-            // Checken ob Match oder nur Leg vorbei ist
             const winAction = this._checkMatchWin(session, player);
             
             return {
-                action: winAction, // 'WIN_LEG' oder 'WIN_MATCH'
+                action: winAction,
                 overlay: { text: 'CHECK!', type: 'check' },
                 points: result.points
             };
@@ -65,20 +59,16 @@ export const X01 = {
 
         // --- FALL 3: DOUBLED IN (Spezialfall) ---
         if (result.status === 'DOUBLED_IN') {
-             // Kein Return, wir machen weiter mit "CONTINUE", aber evtl. Overlay?
-             // Wir lassen es als normalen Wurf laufen, UI zeigt Punkte.
+             // Weiter mit CONTINUE
         }
 
         // --- FALL 4: NORMALER WEITERGANG ---
-        // Prüfen ob 3 Darts voll sind
         if (session.tempDarts.length >= 3) {
-            // Aufnahme beendet
-            player.startOfTurnResidual = player.currentResidual; // Neuen Startwert setzen für nächste Runde
+            player.startOfTurnResidual = player.currentResidual;
             
             const totalScore = session.tempDarts.reduce((a, b) => a + b.points, 0);
-            this._logTurn(player, session, {}); // Normaler Log
+            this._logTurn(player, session, {});
 
-            // Check auf "MISS" (3 Darts, 0 Punkte)
             let ovType = 'standard';
 			let ovText = totalScore.toString();
 
@@ -92,17 +82,15 @@ export const X01 = {
 				ovType = 'miss';
 				ovText = 'MISS';
 			} else if (totalScore <= 10) { 
-				 // Optional: "Bad Score" Logik? Vorerst standard.
 				 ovType = 'standard';
 			}
 
 			return { 
 				action: 'NEXT_TURN', 
 				overlay: { text: ovText, type: ovType }, 
-				delay: (ovType === '180' ? 2500 : 1200) // Längere Pause bei 180
+				delay: (ovType === '180' ? 2500 : 1200)
 			};
 		}
-        // Noch Darts übrig -> Weiter
         return { action: 'CONTINUE' };
     },
 
@@ -126,38 +114,27 @@ export const X01 = {
         player.legsWon = (player.legsWon || 0) + 1;
 
         if (settings.mode === 'sets') {
-             if (player.legsWon >= 3) { // Satz gewonnen (Best of 5 Standard)
+             if (player.legsWon >= 3) {
                  player.setsWon = (player.setsWon || 0) + 1;
-                 // Legs resetten passiert erst im Engine resetLeg, aber wir brauchen den Status jetzt
                  if (player.setsWon >= legsNeeded) return 'WIN_MATCH';
              }
-             // Wenn Satz noch nicht vorbei, ist es auch kein Leg Win im Sinne von "Alles vorbei", 
-             // aber hier geben wir WIN_LEG zurück, Engine zeigt dann Satz-Info.
              return 'WIN_LEG'; 
         } 
         
-        // Leg Modus
         if (player.legsWon >= legsNeeded) return 'WIN_MATCH';
         return 'WIN_LEG';
     },
 
-    _calculatePoints: function(val) {
-        if(val === '0') return 0; if(val === '25') return 25; if(val === '50') return 50; 
-        const type = val.charAt(0); 
-        const num = parseInt(val.substring(1));
-        if(isNaN(num)) return 0;
-        if(type === 'S') return num; 
-        if(type === 'D') return num * 2; 
-        if(type === 'T') return num * 3; 
-        return 0;
-    },
-
-    _processThrow: function(player, inputVal, settings) {
-        const thrownPoints = this._calculatePoints(inputVal);
+    /**
+     * Step 7a: Nutzt dart.points und dart.multiplier direkt.
+     * _calculatePoints() ist komplett entfallen!
+     */
+    _processThrow: function(player, dart, settings) {
+        const thrownPoints = dart.points;
         const isDoubleOut = settings.doubleOut;
         const isDoubleIn = settings.doubleIn;
         const hasDoubledIn = player.hasDoubledIn;
-        const isDoubleHit = inputVal.startsWith('D') || inputVal === '50';
+        const isDoubleHit = dart.multiplier === 2;
 
         // Check Double In
         if (isDoubleIn && !hasDoubledIn) {
@@ -185,7 +162,6 @@ export const X01 = {
         return { status: 'OK', points: thrownPoints };
     },
 
-    // Texte für das Modal
     handleWinLogik: function(session, player, result) {
         const opponent = session.players.find(p => p.id !== player.id);
         const scoreDisplay = `${player.legsWon}:${opponent ? opponent.legsWon : 0}`;
@@ -193,9 +169,6 @@ export const X01 = {
         
         if (session.settings.mode === 'sets') {
              const setScore = `${player.setsWon}:${opponent ? opponent.setsWon : 0}`;
-             // Hat er gerade einen Satz gewonnen?
-             // Wir wissen es implizit durch die Logic in _checkMatchWin, aber hier für Text:
-             // Einfachheitshalber zeigen wir immer Sets an.
              if (isMatch) {
                  return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${setScore} Sätze!`, nextActionText: "STATISTIK" };
              }
@@ -207,8 +180,10 @@ export const X01 = {
         }
         return { messageTitle: "LEG GEWONNEN!", messageBody: `${player.name} checkt zum ${scoreDisplay}!`, nextActionText: "NÄCHSTES LEG" };
     },
-	
-	// getResultData und getCheckoutGuide bleiben unverändert (kopiere sie aus deiner alten Datei oder lass sie drin)
+
+    /**
+     * Step 7a: Heatmap nutzt jetzt dart.segment statt dart.val
+     */
     getResultData: function(session, player) {
          const turnScores = player.turns.map(t => t.score || 0);
          const totalPoints = turnScores.reduce((a,b) => a+b, 0);
@@ -244,9 +219,12 @@ export const X01 = {
              else if(s >= 100) c100++;
          });
  
+         // Step 7a: Einheitliche Heatmap über dart.segment
          const heatmap = {};
          allDarts.forEach(d => {
-             heatmap[d.val] = (heatmap[d.val] || 0) + 1;
+             if (!d.isMiss && d.segment) {
+                 heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
+             }
          });
  
          const chartData = {
@@ -260,7 +238,6 @@ export const X01 = {
                  first9: f9Avg, 
                  bestLeg: bestLegDarts === Infinity ? '-' : bestLegDarts, 
                  checkout: bestCheckout || '-',
-                 // WICHTIG: Diese Werte fehlten für die Lifetime-Statistik!
                  totalScore: totalPoints,
                  totalDarts: totalDarts
              },

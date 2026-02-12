@@ -28,34 +28,36 @@ export const Shanghai = {
         player.turns = [];
     },
 
-    handleInput: function(session, player, input) {
+    /**
+     * Step 7a: Empfängt universelles Dart-Objekt.
+     * dart.points = base × multiplier = target × multiplier → passt direkt!
+     */
+    handleInput: function(session, player, dart) {
         const currentRoundIdx = player.turns.length;
         const target = session.targets[currentRoundIdx];
         
         let points = 0;
         let hitMultiplier = 0;
         
-        if (!input.isMiss) {
-            points = target * input.multiplier;
-            hitMultiplier = input.multiplier;
+        if (!dart.isMiss) {
+            points = dart.points;         // base × multiplier (bereits korrekt!)
+            hitMultiplier = dart.multiplier;
         }
         
         player.currentResidual += points;
-        session.tempDarts.push({ val: input, points: points });
+        session.tempDarts.push(dart);
 
-        // 1. SHANGHAI CHECK (Sofort-Sieg bei S-D-T im 3. Dart)
-        if (!input.isMiss && session.tempDarts.length === 3) {
-            const m1 = session.tempDarts[0].val.multiplier; 
-            const m2 = session.tempDarts[1].val.multiplier;
-            const m3 = hitMultiplier; // der aktuelle
+        // 1. SHANGHAI CHECK (S-D-T im 3. Dart)
+        if (!dart.isMiss && session.tempDarts.length === 3) {
+            const m1 = session.tempDarts[0].multiplier; 
+            const m2 = session.tempDarts[1].multiplier;
+            const m3 = hitMultiplier;
             
             const mSet = new Set([m1, m2, m3]);
             if (mSet.has(1) && mSet.has(2) && mSet.has(3)) {
-                // Turn loggen
                 const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);
                 player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
                 
-                // Ein echtes Shanghai beendet das Spiel sofort für alle!
                 return { 
                     action: 'WIN_MATCH', 
                     overlay: { text: 'SHANGHAI!', type: 'check' },
@@ -65,24 +67,18 @@ export const Shanghai = {
         }
 
         // 2. RUNDEN-ENDE CHECK
-        // Wenn 3 Darts geworfen und es war die letzte Runde
         if (session.tempDarts.length === 3) {
              const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);
              player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
 
-             // War das die letzte Runde (z.B. Runde 7 von 7)?
              if (currentRoundIdx >= session.targets.length - 1) {
-                 player.finished = true; // Spieler ist fertig
-                 
-                 // Wir geben NEXT_TURN zurück. Die GameEngine prüft dann, ob ALLE fertig sind.
-                 // Wenn ja, beendet sie das Spiel. Wenn nein, kommt der nächste Spieler.
+                 player.finished = true;
                  return { 
                      action: 'NEXT_TURN', 
                      overlay: { text: "FINISH", type: 'check' }
                  };
              }
 
-             // Normale Runde vorbei
              let ovText = totalTurn.toString();
              let ovType = 'standard';
              if (totalTurn === 0) { ovText = "MISS"; ovType = 'miss'; }
@@ -108,25 +104,23 @@ export const Shanghai = {
         };
     },
     
+    /**
+     * Step 7a: Heatmap über dart.segment statt Reconstruction.
+     * Distribution über dart.multiplier statt d.val.multiplier.
+     */
     getResultData: function(session, player) {
         const allThrows = player.turns.flatMap(t => t.darts || []);
-        const hits = allThrows.filter(d => !d.val.isMiss && d.val.multiplier > 0);
-        const singles = hits.filter(d => d.val.multiplier === 1).length;
-        const doubles = hits.filter(d => d.val.multiplier === 2).length;
-        const triples = hits.filter(d => d.val.multiplier === 3).length;
+        const hits = allThrows.filter(d => !d.isMiss && d.multiplier > 0);
+        const singles = hits.filter(d => d.multiplier === 1).length;
+        const doubles = hits.filter(d => d.multiplier === 2).length;
+        const triples = hits.filter(d => d.multiplier === 3).length;
         
+        // Step 7a: Einheitliche Heatmap über dart.segment
         const heatmap = {};
-        player.turns.forEach((turn, roundIdx) => {
-            const target = session.targets[roundIdx];
-            if (!turn.darts) return;
-            turn.darts.forEach(d => {
-                const input = d.val;
-                if (input && !input.isMiss) {
-                    const prefix = input.multiplier === 3 ? "T" : (input.multiplier === 2 ? "D" : "S");
-                    const segId = prefix + target;
-                    heatmap[segId] = (heatmap[segId] || 0) + 1;
-                }
-            });
+        allThrows.forEach(d => {
+            if (!d.isMiss && d.segment) {
+                heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
+            }
         });
 
         const chartLabels = session.targets.slice(0, player.turns.length);

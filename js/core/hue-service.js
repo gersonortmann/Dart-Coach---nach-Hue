@@ -130,7 +130,7 @@ export const HueService = {
                 
                 for (const [id, light] of Object.entries(lights)) {
                     const name = light.name.toLowerCase();
-                    if (name.includes('flux') || name.includes('dart') || name.includes('lightstrip')) {
+                    if (name.includes('dart') || name.includes('lightstrip')) {
                         _hueState.lightId = id;
                         console.log(`💡 Licht gefunden: ${light.name} (ID: ${id})`);
                         this._saveConfig();

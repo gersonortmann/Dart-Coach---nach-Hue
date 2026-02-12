@@ -27,16 +27,18 @@ export const SingleTraining = {
         player.turns = [];
     },
 
-    handleInput: function(session, player, input) {
+    /**
+     * Step 7a: Empfängt universelles Dart-Objekt.
+     * points = Multiplier-Wert (S=1, D=2, T=3), NICHT base*multiplier.
+     */
+    handleInput: function(session, player, dart) {
         const currentRoundIdx = player.turns.length;
         
-        let points = 0;
-        if (!input.isMiss) {
-            points = input.multiplier; 
-        }
+        // Spiel-spezifische Punkte: Multiplier als Score (1, 2 oder 3)
+        const points = dart.isMiss ? 0 : dart.multiplier;
 
         player.currentResidual += points;
-        session.tempDarts.push({ val: input, points: points });
+        session.tempDarts.push({ ...dart, points: points });
         
         // 3 Darts Check
         if (session.tempDarts.length >= 3) {
@@ -51,7 +53,7 @@ export const SingleTraining = {
              if (currentRoundIdx >= 20) {
                  player.finished = true;
                  return { 
-                    action: 'NEXT_TURN', // Engine prüft "allFinished"
+                    action: 'NEXT_TURN',
                     overlay: { text: "FINISH", type: 'check' } 
                 };
              }
@@ -74,14 +76,18 @@ export const SingleTraining = {
         };
     },
 
+    /**
+     * Step 7a: Nutzt dart.isMiss, dart.multiplier, dart.segment direkt.
+     * Heatmap-Reconstruction (15 Zeilen) → 3 Zeilen über dart.segment.
+     */
     getResultData: function(session, player) {
         const allThrows = player.turns.flatMap(t => t.darts || []);
         const totalDarts = allThrows.length;
-        const hits = allThrows.filter(d => !d.val.isMiss && d.val.multiplier > 0);
+        const hits = allThrows.filter(d => !d.isMiss && d.multiplier > 0);
         
-        const singles = hits.filter(d => d.val.multiplier === 1).length;
-        const doubles = hits.filter(d => d.val.multiplier === 2).length;
-        const triples = hits.filter(d => d.val.multiplier === 3).length;
+        const singles = hits.filter(d => d.multiplier === 1).length;
+        const doubles = hits.filter(d => d.multiplier === 2).length;
+        const triples = hits.filter(d => d.multiplier === 3).length;
         
         const hitRate = totalDarts > 0 ? ((hits.length / totalDarts) * 100).toFixed(1) : "0.0";
 
@@ -91,22 +97,12 @@ export const SingleTraining = {
             return turn ? turn.score : 0;
         });
 
+        // Step 7a: Einheitliche Heatmap über dart.segment
         const heatmap = {};
-        player.turns.forEach((turn, roundIdx) => {
-            const target = session.targets[roundIdx];
-            if (!turn.darts) return;
-            turn.darts.forEach(d => {
-                const input = d.val;
-                if (input.isMiss) return;
-                let segId = "";
-                if (target === 25) {
-                    segId = input.multiplier === 2 ? "50" : "25";
-                } else {
-                    const prefix = input.multiplier === 3 ? "T" : (input.multiplier === 2 ? "D" : "S");
-                    segId = prefix + target;
-                }
-                heatmap[segId] = (heatmap[segId] || 0) + 1;
-            });
+        allThrows.forEach(d => {
+            if (!d.isMiss && d.segment) {
+                heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
+            }
         });
 
         return {

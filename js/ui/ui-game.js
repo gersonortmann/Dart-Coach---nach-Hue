@@ -320,7 +320,7 @@ export const Game = {
         hintContainer.innerText = `Ziel ${currentIdx + 1} von ${session.targets.length}`;
 
         // Score in Aufnahme
-        const currentTurnHits = (session.tempDarts || []).filter(d => d.isHit).length;
+        const currentTurnHits = (session.tempDarts || []).filter(d => !d.isMiss).length;
         scoreVal.innerText = currentTurnHits + " Hits";
         
         this._updateDartBoxes(session);
@@ -421,6 +421,10 @@ export const Game = {
         this._renderMultiplayerScoreboard(session);
     },
 
+    /**
+     * Step 7a: Liest jetzt das universelle Dart-Format.
+     * dart.segment, dart.isMiss, dart.multiplier, dart.base
+     */
     _updateDartBoxes: function(session) {
         for(let i=1; i<=3; i++) {
             const box = document.getElementById(`dart-box-${i}`);
@@ -432,48 +436,41 @@ export const Game = {
             if(dart) {
                 box.classList.add('filled');
                 
-				// --- NEU: AROUND THE BOARD LOGIK ---
-				if (session.gameId === 'around-the-board') {
-                    if (dart.isHit) {
-                        box.innerText = "✔"; // Oder Checkmark Icon
+                // MISS (universal – gilt für alle Spiele)
+                if (dart.isMiss) {
+                    box.innerText = "✖";
+                    box.classList.add('is-miss');
+                }
+                // AROUND THE BOARD: Treffer = ✔
+                else if (session.gameId === 'around-the-board') {
+                    box.innerText = "✔";
+                    box.style.color = 'var(--accent-color)';
+                }
+                // TRAINING / SHANGHAI: Zeige S/D/T (nur Buchstabe)
+                else if (session.gameId === 'single-training' || session.gameId === 'shanghai') {
+                    const map = { 1: 'S', 2: 'D', 3: 'T' };
+                    box.innerText = map[dart.multiplier] || '?';
+                }
+                // CRICKET: Segment mit Bull-Sonderbehandlung
+                else if (session.gameId === 'cricket') {
+                    let text = dart.segment || '?';
+                    if (text === 'S25') text = 'SB';
+                    else if (text === 'D25') text = 'DB';
+                    else if (text.startsWith('S')) text = text.substring(1); // S20 → 20
+                    box.innerText = text;
+                    // Farbe wenn Cricket-Target getroffen
+                    const cricketTargets = [15,16,17,18,19,20,25];
+                    if (cricketTargets.includes(dart.base)) {
                         box.style.color = 'var(--accent-color)';
-                    } else {
-                        box.innerText = "✖";
-                        box.classList.add('is-miss');
                     }
                 }
-				
-                // CRICKET SPEZIAL LOGIK
-                else if (session.gameId === 'cricket') {
-                    let valStr = dart.val.toString();
-                    if(valStr === 'MISS' || valStr === '0') {
-                        box.innerText = "✖";
-                        box.classList.add('is-miss');
-                    } else {
-                        // S20 -> 20, D20 -> D20, T20 -> T20
-                        if(valStr.startsWith('S')) valStr = valStr.substring(1);
-                        if(valStr === '25') valStr = 'SB'; // Single Bull
-                        if(valStr === '50') valStr = 'DB'; // Double Bull
-                        box.innerText = valStr;
-                        // Farbe je nach Treffer (optional)
-                        if(dart.points > 0 || dart.marksAdded > 0) box.style.color = 'var(--accent-color)';
-                    }
-                } 
-                // STANDARD LOGIK
+                // X01 / STANDARD: Segment anzeigen
                 else {
-                    if (dart.val === '0' || (typeof dart.val === 'object' && dart.val.isMiss)) { 
-                        box.innerText = "✖"; 
-                        box.classList.add('is-miss'); 
-                    } else if (typeof dart.val === 'object') {
-                        const map = { 1: 'S', 2: 'D', 3: 'T' };
-                        box.innerText = map[dart.val.multiplier];
-                    } else {
-                        let text = dart.val.toString(); 
-                        text = text.replace('S', '');
-                        if (text === '25') text = '25';
-                        if (text === '50') text = 'Bull';
-                        box.innerText = text; 
-                    }
+                    let text = dart.segment || '?';
+                    if (text === 'S25') text = '25';
+                    else if (text === 'D25') text = 'Bull';
+                    else if (text.startsWith('S')) text = text.substring(1); // S20 → 20
+                    box.innerText = text;
                 }
             } else { 
                 box.innerText = ""; 

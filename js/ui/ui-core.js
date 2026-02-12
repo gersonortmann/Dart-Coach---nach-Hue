@@ -7,6 +7,7 @@ import { Management } from './ui-mgmt.js';
 import { Game } from './ui-game.js';
 import { Keyboard } from './ui-keyboard.js';
 import { HueService } from '../core/hue-service.js';
+import { EventBus } from '../core/event-bus.js';        // ← NEU
 import { AutodartsService } from '../core/autodarts-service.js';
 
 const GAME_NAMES = {
@@ -378,32 +379,7 @@ export const UI = {
             s.classList.add('hidden');
         });
 		
-		if (window.DartApp && window.DartApp.Hue) {
-            const Hue = window.DartApp.Hue;
-			
-			switch(id) {
-				// A) STARTSEITE & SPIELAUSWAHL -> Grünes Kaminfeuer
-                case 'screen-dashboard':
-                case 'screen-game-selector': 
-                    Hue.setMood('intro'); 
-                    break;
-                    
-                // B) OPTIONSBILDSCHIRM (Setup) -> Magenta
-                case 'screen-match-setup': 
-                    Hue.setMood('match-setup'); 
-                    break;
-                    
-                // C) SPIEL -> Warmweiß (Ruhiges Licht)
-                case 'screen-game':
-                    Hue.setMood('warm'); 
-                    break;
-                    
-                // D) ERGEBNIS -> Gold
-                case 'screen-result':
-                    Hue.setMood('match-won'); 
-                    break;
-			}
-        }
+		EventBus.emit('SCREEN_CHANGED', { screen: id });
 		
 		const hueWidget = document.getElementById('hue-status-widget');
         if (hueWidget) {

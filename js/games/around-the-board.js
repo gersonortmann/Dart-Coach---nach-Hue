@@ -31,14 +31,17 @@ export const AroundTheBoard = {
         player.variant = options.variant || 'full';
     },
 
-    handleInput: function(session, player, input) {
+    /**
+     * Step 7a: Empfängt universelles Dart-Objekt.
+     * input === 'HIT' → !dart.isMiss
+     */
+    handleInput: function(session, player, dart) {
         const currentTargetIdx = player.currentResidual; 
         const targetVal = session.targets[currentTargetIdx];
         
         player.totalDarts++;
         
-        // Input ist 'HIT' oder 'MISS'
-        let isHit = (input === 'HIT');
+        const isHit = !dart.isMiss;
         
         if (isHit) {
             player.currentResidual++; 
@@ -46,19 +49,13 @@ export const AroundTheBoard = {
             player.misses++;
         }
 
-        session.tempDarts.push({ 
-            val: input, 
-            isHit: isHit, 
-            target: targetVal 
-        });
+        session.tempDarts.push(dart);
 
-        // 1. WIN CHECK (Geändert für Nachziehen)
+        // 1. WIN CHECK
         if (player.currentResidual >= session.targets.length) {
             this._logTurn(session, player);
-            player.finished = true; // Spieler markieren
+            player.finished = true;
             
-            // WICHTIG: NEXT_TURN statt WIN_MATCH
-            // Die Engine prüft dann "Are all players finished?"
             return { 
                 action: 'NEXT_TURN', 
                 overlay: { text: 'FINISH', type: 'check' } 
@@ -69,7 +66,7 @@ export const AroundTheBoard = {
         if (session.tempDarts.length >= 3) {
             this._logTurn(session, player);
             
-            const hits = session.tempDarts.filter(d => d.isHit).length;
+            const hits = session.tempDarts.filter(d => !d.isMiss).length;
             let overlay = null;
             
             if (hits === 0) {
@@ -88,7 +85,7 @@ export const AroundTheBoard = {
     },
 
     _logTurn: function(session, player) {
-        const hitsInTurn = session.tempDarts.filter(d => d.isHit).length;
+        const hitsInTurn = session.tempDarts.filter(d => !d.isMiss).length;
         player.turns.push({
             roundIndex: session.roundIndex,
             dartsThrown: session.tempDarts.length,
@@ -112,49 +109,45 @@ export const AroundTheBoard = {
         };
     },
     
+    /**
+     * Step 7a: d.isHit → !d.isMiss
+     * Matrix-Logik bleibt ansonsten unverändert.
+     */
     getResultData: function(session, player) {
         const totalDarts = player.totalDarts;
         const targetsHit = player.currentResidual; 
         const misses = player.misses;
         const hitRate = totalDarts > 0 ? ((targetsHit / totalDarts) * 100).toFixed(1) + "%" : "0.0%";
 
-        // --- MATRIX BERECHNUNG (NEU) ---
-        // Wir rekonstruieren: Wie viele Darts pro Ziel?
+        // Matrix: Wie viele Darts pro Ziel?
         const matrix = [];
         const allDarts = player.turns.flatMap(t => t.darts || []);
         
-        // Wir iterieren über die ZIELE der Session
         let dartPointer = 0;
         
         session.targets.forEach((tVal, idx) => {
-            // Wenn Spieler dieses Ziel noch nicht erreicht hat (bei Abbruch), stoppen
             if (idx > player.currentResidual) return;
             
             let count = 0;
             let finished = false;
             
-            // Suche im Dart-Stream ab dartPointer
             while(dartPointer < allDarts.length) {
                 const d = allDarts[dartPointer];
                 dartPointer++;
                 count++;
                 
-                if (d.isHit) {
+                if (!d.isMiss) {
                     finished = true;
-                    break; // Ziel getroffen, weiter zum nächsten
+                    break;
                 }
             }
             
-            // Nur hinzufügen, wenn wir auch Darts geworfen haben für dieses Ziel
-            // oder wenn es das aktuelle Ziel ist (auch bei 0 Hits)
             if (count > 0 || idx === player.currentResidual) {
                 const label = (tVal === 25) ? 'B' : tVal.toString();
-                // Heatmap Logik für Farben
-                let heatClass = 'heat-low'; // Rot/Schlecht
-                if (count <= 1) heatClass = 'heat-high'; // Perfekt (1 Dart)
-                else if (count <= 3) heatClass = 'heat-medium'; // Okay (1 Runde)
+                let heatClass = 'heat-low';
+                if (count <= 1) heatClass = 'heat-high';
+                else if (count <= 3) heatClass = 'heat-medium';
                 
-                // Falls noch nicht getroffen (aktuelles Ziel bei Abbruch):
                 if (!finished && idx === player.currentResidual) heatClass = 'heat-low'; 
 
                 matrix.push({ label: label, val: count, heatClass: heatClass });

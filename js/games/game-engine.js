@@ -1,5 +1,6 @@
 import { State } from '../core/state.js'; 
 import { EventBus } from '../core/event-bus.js';
+import { normalizeDart } from '../core/dart-model.js';
 import { X01 } from './x01.js';
 import { SingleTraining } from './single-training.js';
 import { Shanghai } from './shanghai.js';
@@ -23,6 +24,17 @@ let lastInputTime = 0;
 
 function _getStrategy(gameId) {
     return STRATEGY_MAP[gameId] || null;
+}
+
+/**
+ * Ermittelt das aktuelle Ziel (Target) für den aktiven Spieler.
+ * Wird von normalizeDart() benötigt für Training/Shanghai/ATB/Bob's27,
+ * wo das Keypad kein Segment liefert, sondern nur {multiplier} oder 'HIT'.
+ */
+function _getCurrentTarget(session) {
+    const player = session.players[session.currentPlayerIndex];
+    const roundIdx = player.turns.length;
+    return session.targets?.[roundIdx] ?? null;
 }
 
 function _pushUndoState(session) {
@@ -118,7 +130,6 @@ export const GameEngine = {
     },  
 
     startGame(gameType, selectedPlayerIds, gameOptions) {
-        // EVENT statt direkter HueService.setMood('warm')
         EventBus.emit('GAME_EVENT', { type: 'game-started' });
 
         const strategy = _getStrategy(gameType);
@@ -150,10 +161,10 @@ export const GameEngine = {
     },
 
     /**
-     * ZENTRALE INPUT METHODE (REFACTORED - Event-Bus)
+     * ZENTRALE INPUT METHODE (Step 6: Event-Bus + Step 7a: Dart-Model)
      * 
-     * Vorher: ~60 Zeilen HueService-Logik direkt hier.
-     * Nachher: 1x EventBus.emit() → HueService subscribed und reagiert eigenständig.
+     * Jeder Input (Keypad, Autodarts) wird durch normalizeDart() in ein
+     * universelles Dart-Objekt umgewandelt, bevor er an die Strategy geht.
      */
     onInput(value) {
         if (isLocked) return; 
@@ -176,27 +187,35 @@ export const GameEngine = {
         
         if (player.finished) { _nextTurn(session); return; }
 
-        // 2. DELEGATION an Strategy
-        const result = strategy.handleInput(session, player, value);
+        // 2. INPUT NORMALISIEREN (Step 7a: Unified Dart Model)
+        //    Wandelt JEDES Format (String, Object, Autodarts) in ein
+        //    universelles Dart-Objekt um, bevor die Strategy es bekommt.
+        const target = _getCurrentTarget(session);
+        const dart = normalizeDart(value, {
+            target: target,
+            gameId: session.gameId,
+            source: session.useAutodarts ? 'autodarts' : 'keypad'
+        });
 
-        // 3. EVENT EMITTIEREN (ersetzt ~60 Zeilen HueService-Logik)
-        //    HueService (und zukünftig SoundService) subscriben auf dieses Event.
+        // 3. DELEGATION an Strategy (bekommt jetzt immer ein Dart-Objekt)
+        const result = strategy.handleInput(session, player, dart);
+
+        // 4. EVENT EMITTIEREN (Step 6: Event-Bus)
         EventBus.emit('GAME_EVENT', {
             type: 'input-processed',
             overlay: result.overlay || null,
             action: result.action,
-            value: value,
+            dart: dart,
             gameId: session.gameId,
-            // Für Highscore-Check bei X01/Training
             lastTurnScore: _getLastTurnScore(player, session.gameId)
         });
 
-        // 4. UI FEEDBACK (Overlay)
+        // 5. UI FEEDBACK (Overlay)
         if (result.overlay) {
             UI.showOverlay(result.overlay.text, result.overlay.type);
         }
 
-        // 5. AKTION AUSFÜHREN
+        // 6. AKTION AUSFÜHREN
         switch (result.action) {
             case 'BUST':
                 _triggerAnimation('BUST', 1500, () => {

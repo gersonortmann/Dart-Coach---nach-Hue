@@ -18,16 +18,28 @@ export const Bobs27 = {
         player.finished = false;
     },
 
-    handleInput: function(session, player, input) {
-        // Input ist hier { hits: 0..3 }
+    /**
+     * Step 7a: Empfängt universelles Dart-Objekt.
+     * Bob's 27 nutzt Aggregate-Mode: Ein Klick pro Runde ({hits: 0-3}).
+     * normalizeDart() setzt _isAggregate + _aggregateHits auf dem Dart.
+     * 
+     * Phase B (Zukunft mit Autodarts): Per-Dart-Mode mit
+     *   hits = (dart.multiplier === 2 && dart.base === target) ? 1 : 0
+     */
+    handleInput: function(session, player, dart) {
         const currentRoundIdx = player.turns.length;
         const targets = session.targets;
         
-        // Safety Check
         if (currentRoundIdx >= targets.length) return { action: 'FINISH_GAME' };
 
         const targetVal = targets[currentRoundIdx];
-        const hits = input.hits; 
+        
+        // Aggregate-Mode (Keypad): _aggregateHits enthält 0-3
+        // Per-Dart-Mode (Zukunft): Prüfe ob es ein Double auf das Target ist
+        const hits = dart._isAggregate 
+            ? dart._aggregateHits 
+            : (dart.multiplier === 2 && dart.base === targetVal ? 1 : 0);
+        
         const targetScoreValue = targetVal * 2; // Bull 25 * 2 = 50, D20 = 40
         
         let scoreChange = 0;
@@ -42,10 +54,7 @@ export const Bobs27 = {
 
         player.scoreHistory.push(player.currentResidual);
         
-		session.tempDarts.push({
-            val: hits, // Wert ist für Bobs27 irrelevant, aber Array darf nicht leer sein
-            points: scoreChange
-        });
+		session.tempDarts.push(dart);
 		
         // Turn Loggen
         player.turns.push({
@@ -65,7 +74,6 @@ export const Bobs27 = {
             player.isEliminated = true;
             player.finished = true;
             
-            // NEU: 'bust' Overlay Typ nutzen
             overlayText = "BUST";
             overlayType = 'bust'; 
         }
@@ -86,7 +94,6 @@ export const Bobs27 = {
     },
 
     getResultData: function(session, player) {
-        // ... (Identisch zum alten Code) ...
         const labels = session.targets.slice(0, player.scoreHistory.length).map(t => {
             return t === 25 ? "BULL" : "D" + t;
         });

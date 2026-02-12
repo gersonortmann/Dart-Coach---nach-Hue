@@ -21,20 +21,14 @@ export const Cricket = {
         player.spRoundsPlayed = 0;
     },
 
-    handleInput: function(session, player, input) {
-        let targetVal = 0;
-        let hits = 0;
-
-        // Input Normalisierung
-        if (input === '0' || input === 'MISS') { targetVal = 0; hits = 0; }
-        else if (input === '25') { targetVal = 25; hits = 1; }
-        else if (input === '50') { targetVal = 25; hits = 2; }
-        else {
-            const type = input.charAt(0);
-            const num = parseInt(input.substring(1));
-            targetVal = num;
-            if (type === 'S') hits = 1; else if (type === 'D') hits = 2; else if (type === 'T') hits = 3;
-        }
+    /**
+     * Step 7a: Empfängt universelles Dart-Objekt.
+     * 20 Zeilen String-Parsing → 2 Zeilen: dart.base + dart.multiplier
+     */
+    handleInput: function(session, player, dart) {
+        // Step 7a: Input-Parsing entfällt komplett!
+        const targetVal = dart.base;                          // 20, 19, ..., 25 oder 0
+        const hits = dart.isMiss ? 0 : dart.multiplier;      // 0, 1, 2, oder 3
 
         const validTargets = session.targets; 
         let pointsScored = 0;
@@ -58,27 +52,20 @@ export const Cricket = {
             }
         }
 
-        session.tempDarts.push({ 
-            val: input, 
-            points: pointsScored, 
-            targetHit: targetVal,
-            hits: hits
-        });
+        // Dart speichern: points wird mit Cricket-spezifischem Wert überschrieben
+        session.tempDarts.push({ ...dart, points: pointsScored });
 
-        // --- WIN CHECK (Alles geschlossen & höchste Punkte) ---
+        // --- WIN CHECK ---
         if (this._checkWinCondition(session, player)) { 
              this._logTurn(session, player);
              return { action: 'WIN_MATCH', overlay: { text: "WINNER!", type: 'check' }, suppressModal: true };
         }
         
-        // --- LIMIT CHECK (Global für Single- & Multiplayer) ---
-        // Fix: isSP Check entfernt, damit das Limit immer greift (Standard 20 oder Auswahl)
+        // --- LIMIT CHECK ---
         const maxRounds = session.settings.spRounds || 20;
         
         if (player.turns.length + 1 >= maxRounds && session.tempDarts.length === 3) {
-             this._logTurn(session, player); // Letzte Runde loggen
-             
-             // Im Multiplayer ist dies meist ein Draw oder Point-Win -> Wir nennen es "FINISH"
+             this._logTurn(session, player);
              return { action: 'WIN_MATCH', overlay: { text: "FINISH!", type: 'check' }, suppressModal: true };
         }
 
@@ -86,9 +73,8 @@ export const Cricket = {
         if (session.tempDarts.length >= 3) {
             this._logTurn(session, player);
             
-            // Fix: Keine aufsummierten Punkte mehr anzeigen
-            // Wir prüfen nur noch auf MISS (kein Treffer in der ganzen Aufnahme)
-            const anyHit = session.tempDarts.some(d => d.targetHit > 0);
+            // Check auf MISS: Kein Dart hat ein gültiges Target getroffen
+            const anyHit = session.tempDarts.some(d => !d.isMiss && validTargets.includes(d.base));
             
             if (!anyHit && !overlayText) { 
                  overlayText = "MISS"; 
@@ -97,9 +83,8 @@ export const Cricket = {
 
             return { 
                 action: 'NEXT_TURN', 
-                // Wenn kein OverlayText da ist (z.B. bei normalen Treffern ohne Open/Close), zeigen wir keins
                 overlay: overlayText ? { text: overlayText, type: overlayType } : null,
-                delay: overlayText ? 1200 : 500 // Kürzere Pause wenn kein Overlay
+                delay: overlayText ? 1200 : 500
             };
         }
 
@@ -109,7 +94,6 @@ export const Cricket = {
         };
     },
 
-    // Neuer Helper zum Loggen (vermeidet Code-Duplizierung)
     _logTurn: function(session, player) {
         const turnTotal = session.tempDarts.reduce((a, b) => a + b.points, 0);
         player.turns.push({
@@ -181,6 +165,10 @@ export const Cricket = {
         };
     },
 
+    /**
+     * Step 7a: Heatmap nutzt dart.segment statt String-Reconstruction.
+     * Distribution nutzt dart.multiplier statt d.hits / d.val Parsing.
+     */
     getResultData: function(session, player) {
         let totalMarks = 0;
         let totalDarts = 0;
@@ -193,26 +181,18 @@ export const Cricket = {
                     turn.darts.forEach(d => {
                         totalDarts++;
                         
-                        let hits = d.hits;
-                        if(hits === undefined) {
-                            if(d.val && d.val.startsWith && d.val.startsWith('T')) hits = 3;
-                            else if(d.val && d.val.startsWith && d.val.startsWith('D')) hits = 2;
-                            else if(d.val && d.val !== '0' && d.val !== 'MISS') hits = 1;
-                            else hits = 0;
-                        }
+                        const hits = d.isMiss ? 0 : d.multiplier;
 
-                        if (hits > 0 && d.targetHit > 0) {
+                        if (hits > 0 && d.base > 0) {
                             totalMarks += hits;
                             if(hits === 1) distribution.singles++;
                             else if(hits === 2) distribution.doubles++;
                             else if(hits === 3) distribution.triples++;
                         }
 
-                        let key = d.val;
-                        if(key === '25') key = 'S25'; 
-                        if(key === '50') key = 'D25';
-                        if(key && key !== '0' && key !== 'MISS') {
-                             heatmap[key] = (heatmap[key] || 0) + 1;
+                        // Einheitliche Heatmap über dart.segment
+                        if (!d.isMiss && d.segment) {
+                             heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
                         }
                     });
                 }
