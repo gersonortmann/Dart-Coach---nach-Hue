@@ -1,11 +1,11 @@
 import { State } from '../core/state.js'; 
+import { EventBus } from '../core/event-bus.js';
 import { X01 } from './x01.js';
 import { SingleTraining } from './single-training.js';
 import { Shanghai } from './shanghai.js';
 import { Bobs27 } from './bobs27.js';
 import { Cricket } from './cricket.js';
 import { AroundTheBoard } from './around-the-board.js';
-import { HueService } from '../core/hue-service.js';
 import { UI } from '../ui/ui-core.js';
 
 const STRATEGY_MAP = {
@@ -18,8 +18,8 @@ const STRATEGY_MAP = {
 };
 
 // --- PRIVATE VARS ---
-let isLocked = false; // Die globale Sperre für Eingaben
-let lastInputTime = 0; // Spam-Schutz
+let isLocked = false;
+let lastInputTime = 0;
 
 function _getStrategy(gameId) {
     return STRATEGY_MAP[gameId] || null;
@@ -27,33 +27,26 @@ function _getStrategy(gameId) {
 
 function _pushUndoState(session) {
     if (!session.historyStack) session.historyStack = [];
-    // Wir speichern eine tiefe Kopie relevanter Daten
-    // (Performance-Hinweis: JSON.stringify ist hier okay, solange State klein bleibt)
     const snapshot = JSON.stringify({
         pIdx: session.currentPlayerIndex,
         rIdx: session.roundIndex, 
         turnTotal: session.turnTotalIndex, 
         players: session.players,
         tempDarts: session.tempDarts,
-        // WICHTIG: Falls Strategies eigene State-Felder haben (wie Cricket Marks),
-        // werden sie hier mitgesichert, da sie im 'players'-Objekt hängen.
     });
     session.historyStack.push(snapshot);
     if (session.historyStack.length > 50) session.historyStack.shift();
 }
 
-/**
- * Steuert Animationen und Input-Sperre zentral
- */
 function _triggerAnimation(type, duration = 1000, callback) {
-    isLocked = true; // SPERREN
+    isLocked = true;
     
     State.updateSessionState({ animation: type });
     UI.updateGameDisplay();
 
     setTimeout(() => {
-        State.updateSessionState({ animation: null }); // Reset
-        isLocked = false; // ENTSPERREN
+        State.updateSessionState({ animation: null });
+        isLocked = false;
         UI.updateGameDisplay();
         if (callback) callback();
     }, duration);
@@ -62,7 +55,6 @@ function _triggerAnimation(type, duration = 1000, callback) {
 function _nextTurn(session) {
     isLocked = true;
     
-    // Kleines Delay für UX (damit man das Ergebnis noch kurz sieht)
     setTimeout(() => {
         let currentIdx = session.currentPlayerIndex;
         let nextPIdx = (currentIdx + 1) % session.players.length;
@@ -74,7 +66,6 @@ function _nextTurn(session) {
             return;
         }
 
-        // Überspringe fertige Spieler
         let loopCount = 0;
         while (session.players[nextPIdx].finished && loopCount < session.players.length) {
             nextPIdx = (nextPIdx + 1) % session.players.length;
@@ -84,7 +75,6 @@ function _nextTurn(session) {
         let nextRoundIndex = session.roundIndex;
         let nextTurnTotal = (session.turnTotalIndex || 0) + 1;
         
-        // Wenn wir wieder beim ersten Spieler sind, neue Runde
         if (nextPIdx === 0) nextRoundIndex++;
 
         State.updateSessionState({
@@ -94,7 +84,7 @@ function _nextTurn(session) {
             tempDarts: [] 
         });
 
-        isLocked = false; // ENTSPERREN
+        isLocked = false;
         UI.updateGameDisplay();
     }, 800); 
 }
@@ -128,7 +118,9 @@ export const GameEngine = {
     },  
 
     startGame(gameType, selectedPlayerIds, gameOptions) {
-		HueService.setMood('warm');
+        // EVENT statt direkter HueService.setMood('warm')
+        EventBus.emit('GAME_EVENT', { type: 'game-started' });
+
         const strategy = _getStrategy(gameType);
         if (!strategy) return;
         
@@ -158,18 +150,14 @@ export const GameEngine = {
     },
 
     /**
-     * ZENTRALE INPUT METHODE (REFACTORED)
-     */
-/**
-     * ZENTRALE INPUT METHODE (FIXED FOR ATB & BOBS27)
-     */
-    /**
-     * ZENTRALE INPUT METHODE (FIXED FOR ATB 3x MISS)
+     * ZENTRALE INPUT METHODE (REFACTORED - Event-Bus)
+     * 
+     * Vorher: ~60 Zeilen HueService-Logik direkt hier.
+     * Nachher: 1x EventBus.emit() → HueService subscribed und reagiert eigenständig.
      */
     onInput(value) {
         if (isLocked) return; 
 
-        // Spam-Schutz (200ms)
         const now = Date.now();
         if (now - lastInputTime < 200) return;
         lastInputTime = now;
@@ -188,116 +176,27 @@ export const GameEngine = {
         
         if (player.finished) { _nextTurn(session); return; }
 
-        // 2. DELEGATION
+        // 2. DELEGATION an Strategy
         const result = strategy.handleInput(session, player, value);
 
-        // =========================================================
-        // HUE INTELLIGENT TRIGGER (FINAL FIX)
-        // =========================================================
-        
-        const isScoreBasedGame = ['bobs27', 'shanghai', 'cricket', 'around-the-board'].includes(session.gameId);
-        let hueTriggered = false;
+        // 3. EVENT EMITTIEREN (ersetzt ~60 Zeilen HueService-Logik)
+        //    HueService (und zukünftig SoundService) subscriben auf dieses Event.
+        EventBus.emit('GAME_EVENT', {
+            type: 'input-processed',
+            overlay: result.overlay || null,
+            action: result.action,
+            value: value,
+            gameId: session.gameId,
+            // Für Highscore-Check bei X01/Training
+            lastTurnScore: _getLastTurnScore(player, session.gameId)
+        });
 
-        // A) Overlay-Events (Priorität 1)
-        if (result.overlay) {
-            hueTriggered = true;
-            switch (result.overlay.type) {
-                case '180':
-                    HueService.trigger('180');
-                    break;
-                case 'high':      
-                case 'very-high': 
-                    HueService.trigger('HIGH_SCORE');
-                    break;
-                
-                case 'check':     
-                    if (session.gameId === 'bobs27') {
-                         HueService.trigger('HIT'); 
-                    } else {
-                         HueService.trigger('180'); 
-                    }
-                    break;
-                
-                case 'match-win':
-                    HueService.trigger('180');
-                    break;
-
-                case 'miss':
-                case 'bust':
-                    // BEI ATB: Overlay "miss" kommt NUR am Ende der Runde bei 3x Miss.
-                    // Daher können wir hier IMMER feuern. Die Einzel-Misses erzeugen KEIN Overlay.
-                    HueService.trigger('MISS');
-                    break;
-
-                case 'standard':       
-                case 'cricket-open':
-                case 'cricket-closed':
-                case 'cricket-hit': 
-                    HueService.trigger('HIT'); 
-                    break;
-
-                default:
-                    HueService.trigger('HIT');
-                    break;
-            }
-        } 
-        
-        // B) Stille Treffer (Priorität 2) - Wenn kein Overlay kam
-        if (!hueTriggered) {
-             const isHitEvent = (value.type === 'HIT') || (value === 'HIT');
-             const isDirectMiss = (value === 'MISS'); // String "MISS"
-             
-             if (isHitEvent || isDirectMiss) {
-                 // War es ein Miss?
-                 const isMiss = isDirectMiss || (value.val && value.val.isMiss);
-                 
-                 if (isMiss) {
-                     // === ATB SPECIAL ===
-                     // Bei ATB wollen wir bei "stillen" Misses (1. oder 2. Dart) KEIN Rotlicht.
-                     // Das Rotlicht soll NUR kommen, wenn das Overlay "miss" kommt (siehe oben).
-                     if (session.gameId === 'around-the-board') {
-                         // TU NICHTS. 
-                         // Wir warten auf das Overlay am Ende der Runde.
-                     } 
-                     // === ANDERE SPIELE ===
-                     else {
-                         HueService.trigger('MISS');
-                     }
-                 } else {
-                     // Treffer (Grün)
-                     HueService.trigger('HIT'); 
-                 }
-             }
-        }
-        
-        // C) Highscore Check (Nur für X01/Training)
-        if (!isScoreBasedGame && player.turns.length > 0) {
-            const lastTurn = player.turns[player.turns.length - 1];
-            if (lastTurn.darts && lastTurn.darts.length === 3) {
-                 const turnScore = lastTurn.score || 0;
-                 setTimeout(() => {
-                     if (turnScore === 180) {
-                         HueService.trigger('180');
-                     } else if (turnScore >= 100) {
-                         HueService.trigger('HIGH_SCORE');
-                     }
-                 }, 600); 
-            }
-        }
-
-        // Match Win Stimmung
-        if (result.action === 'WIN_MATCH') {
-            setTimeout(() => HueService.setMood('match-won'), 2000);
-        }
-        
-        // =========================================================
-
-        // 3. UI FEEDBACK
+        // 4. UI FEEDBACK (Overlay)
         if (result.overlay) {
             UI.showOverlay(result.overlay.text, result.overlay.type);
         }
 
-        // 4. AKTION AUSFÜHREN
+        // 5. AKTION AUSFÜHREN
         switch (result.action) {
             case 'BUST':
                 _triggerAnimation('BUST', 1500, () => {
@@ -381,7 +280,6 @@ export const GameEngine = {
         session.players.forEach(p => {
             if(strategy.initPlayer) strategy.initPlayer(p, session.settings, session.targets);
             p.startOfTurnResidual = p.currentResidual;
-            // Falls Cricket: p.marks resetten? Das entscheidet initPlayer!
         });
         
         session.tempDarts = [];
@@ -397,7 +295,6 @@ export const GameEngine = {
         const session = State.getActiveSession();
         if(!session || !session.historyStack || session.historyStack.length === 0) return;
         
-        // Restore State (Generic)
         const lastState = JSON.parse(session.historyStack.pop());
         
         session.currentPlayerIndex = lastState.pIdx;
@@ -409,3 +306,22 @@ export const GameEngine = {
         UI.updateGameDisplay();
     }
 };
+
+// --- PRIVATE HELPER ---
+
+/**
+ * Ermittelt den Score des letzten abgeschlossenen Turns (3 Darts).
+ * Wird für den Highscore-Check bei X01/Training gebraucht.
+ */
+function _getLastTurnScore(player, gameId) {
+    const isScoreBased = ['bobs27', 'shanghai', 'cricket', 'around-the-board'].includes(gameId);
+    if (isScoreBased) return null;
+    
+    if (player.turns.length > 0) {
+        const lastTurn = player.turns[player.turns.length - 1];
+        if (lastTurn.darts && lastTurn.darts.length === 3) {
+            return lastTurn.score || 0;
+        }
+    }
+    return null;
+}
