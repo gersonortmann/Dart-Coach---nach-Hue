@@ -16,8 +16,7 @@ window.DartApp = {
     GameEngine: GameEngine,
     State: State,
     Store: Store,
-    UI: UI,
-	Hue: HueService
+    UI: UI
 };
 
 // 3. DER INIT-CODE (Der Startvorgang):
