@@ -1,5 +1,6 @@
 import { State } from '../core/state.js';
 import { GameEngine } from '../games/game-engine.js';
+import { Dashboard } from './ui-dashboard.js';
 import { Auth } from './ui-auth.js';
 import { Setup } from './ui-setup.js';
 import { Stats } from './ui-stats.js';
@@ -30,10 +31,6 @@ const SCREEN_CONFIG = {
     },
     'screen-dashboard': { 
         home: false, restart: false, logout: true, 
-        badge: false, title: "Dart Coach V2.0 by Schlomo" 
-    },
-    'screen-game-selector': { 
-        home: true, restart: false, logout: false, 
         badge: false, title: "Dart Coach V2.0 by Schlomo" 
     },
     'screen-match-setup': { 
@@ -246,12 +243,13 @@ export const UI = {
         // SUB-MODULE INITIALISIEREN
         if(Auth) Auth.init();
         if(Setup) Setup.init();
+		window._dashModules = { Setup, Stats, Management };
 		// if(Keyboard) Keyboard.init();
         // Mgmt & Stats brauchen kein Init beim Start, werden beim Klick initiiert
         
         // --- EVENT LISTENER ---
 
-        // Dashboard Buttons
+        /* Dashboard Buttons
         const btnPlay = document.getElementById('dash-btn-play'); 
         if(btnPlay) btnPlay.addEventListener('click', () => { 
             if(Setup) Setup.showGameSelector(); 
@@ -272,7 +270,7 @@ export const UI = {
         if(btnSettings) btnSettings.addEventListener('click', () => {
             if (Management) { Management.init(); }
             this.showScreen('screen-management');
-        });
+        });*/
 
         // Setup Buttons
         const btnShuffle = document.getElementById('btn-shuffle-players'); 
@@ -401,6 +399,9 @@ export const UI = {
         if (targetScreen) {
             targetScreen.classList.remove('hidden');
             targetScreen.classList.add('active');
+			if (id === 'screen-dashboard') {
+				Dashboard.init();
+			}
             State.setScreen(id);
         } else {
             console.warn(`Screen '${id}' not found in DOM.`);

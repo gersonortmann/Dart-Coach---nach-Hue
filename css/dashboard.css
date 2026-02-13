@@ -1,0 +1,494 @@
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD STYLES (dashboard.css)
+   Categorized game selection with Quick-Stats
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── DASHBOARD CONTAINER ───────────────────────────────────── */
+
+#dashboard-content {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 8px 40px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+/* ─── HEADER / GREETING ─────────────────────────────────────── */
+
+.dash-header {
+    text-align: center;
+    padding: 20px 0 0 0;
+}
+
+.dash-header-top {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.dash-greeting {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.dash-greeting-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main, #e4e4e4);
+}
+
+.dash-player-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--accent-color, #00d26a);
+}
+
+.dash-player-select {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--accent-color, #00d26a);
+    background: transparent;
+    border: none;
+    border-bottom: 2px dashed rgba(0, 210, 106, 0.4);
+    padding: 2px 24px 2px 4px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300d26a%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    background-size: 10px;
+    transition: border-color 0.2s;
+}
+
+.dash-player-select:hover,
+.dash-player-select:focus {
+    border-bottom-color: var(--accent-color, #00d26a);
+}
+
+.dash-player-select option {
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.dash-subtitle {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 8px 0 0 0;
+    font-style: italic;
+}
+
+/* ─── SECTION HEADERS ───────────────────────────────────────── */
+
+.dash-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dash-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-section-icon {
+    font-size: 1.1rem;
+}
+
+.dash-section-title {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #666;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dash-coming-soon {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MATCH CARDS (large, prominent)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dash-match-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 640px) {
+    .dash-match-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.dash-card-match {
+    position: relative;
+    background: linear-gradient(145deg, #151520 0%, #1a1a2a 100%);
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    display: flex;
+    min-height: 160px;
+}
+
+.dash-card-match:hover {
+    transform: translateY(-4px);
+    border-color: var(--card-accent, #3b82f6);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px color-mix(in srgb, var(--card-accent) 20%, transparent);
+}
+
+.dash-card-match:active {
+    transform: translateY(-1px) scale(0.99);
+}
+
+/* Accent bar left */
+.dash-card-accent {
+    width: 5px;
+    background: var(--card-accent, #3b82f6);
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.dash-card-match:hover .dash-card-accent {
+    opacity: 1;
+}
+
+.dash-card-body {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dash-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dash-card-icon {
+    font-size: 1.6rem;
+}
+
+.dash-card-label {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+
+.dash-card-desc {
+    font-size: 0.82rem;
+    color: #777;
+    line-height: 1.3;
+}
+
+.dash-card-stat {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--card-accent, #3b82f6);
+    margin-top: auto;
+    padding-top: 8px;
+}
+
+.dash-stat-time {
+    font-weight: 400;
+    color: #555;
+    font-size: 0.8rem;
+}
+
+.dash-stat-empty {
+    color: #444;
+    font-weight: 400;
+    font-style: italic;
+}
+
+.dash-card-action {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.dash-play-btn {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+}
+
+.dash-card-match:hover .dash-play-btn {
+    color: var(--card-accent, #3b82f6);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TRAINING CARDS (compact grid)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dash-training-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+@media (min-width: 640px) {
+    .dash-training-grid {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+}
+
+.dash-card-training {
+    position: relative;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 18px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+/* Top accent line */
+.dash-card-training::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--card-accent, #888);
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.dash-card-training:hover {
+    transform: translateY(-4px);
+    border-color: var(--card-accent, #888);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 15px color-mix(in srgb, var(--card-accent) 15%, transparent);
+}
+
+.dash-card-training:hover::before {
+    opacity: 1;
+}
+
+.dash-card-training:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+.dash-tcard-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+.dash-tcard-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #eee;
+    line-height: 1.2;
+}
+
+.dash-tcard-desc {
+    font-size: 0.72rem;
+    color: #666;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dash-tcard-stat {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--card-accent, #888);
+    margin-top: 4px;
+    padding: 3px 10px;
+    background: color-mix(in srgb, var(--card-accent) 10%, transparent);
+    border-radius: 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TRAINING PLAN TEASER
+   ═══════════════════════════════════════════════════════════════ */
+
+.dash-plan-card {
+    background: #151515;
+    border: 1px dashed #333;
+    border-radius: 14px;
+    padding: 20px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.dash-plan-card:hover {
+    opacity: 0.8;
+}
+
+.dash-plan-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.dash-plan-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+    opacity: 0.5;
+}
+
+.dash-plan-text strong {
+    color: #aaa;
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.dash-plan-text p {
+    color: #666;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   QUICK NAV (Stats + Settings)
+   ═══════════════════════════════════════════════════════════════ */
+
+.dash-quicknav {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding-top: 8px;
+}
+
+.dash-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #888;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.dash-nav-btn:hover {
+    background: #222;
+    border-color: #444;
+    color: #ccc;
+    transform: translateY(-2px);
+}
+
+.dash-nav-btn:active {
+    transform: translateY(0);
+}
+
+.dash-nav-icon {
+    font-size: 1.1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+    .dash-greeting-text {
+        font-size: 1.2rem;
+    }
+
+    .dash-player-select,
+    .dash-player-name {
+        font-size: 1.2rem;
+    }
+
+    .dash-card-match {
+        min-height: 140px;
+    }
+
+    .dash-card-body {
+        padding: 14px;
+    }
+
+    .dash-card-label {
+        font-size: 1.2rem;
+    }
+
+    .dash-tcard-icon {
+        font-size: 1.5rem;
+    }
+
+    .dash-tcard-desc {
+        display: none;
+    }
+
+    .dash-quicknav {
+        flex-direction: column;
+    }
+
+    .dash-nav-btn {
+        justify-content: center;
+    }
+}
+
+/* ─── HOVER GLOW KEYFRAMES (subtle) ────────────────────────── */
+
+@keyframes dash-card-shimmer {
+    0% { background-position: -100% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.dash-card-match::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.02) 50%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.dash-card-match:hover::after {
+    opacity: 1;
+    animation: dash-card-shimmer 2s ease infinite;
+}

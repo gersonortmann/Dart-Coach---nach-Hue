@@ -44,15 +44,6 @@ let cricketSettings = {
     spRounds: 20      // Singleplayer Rundenlimit
 };
 
-const GAME_ICONS = {
-    'x01': '👑',
-	'single-training': '🎯',
-	'around-the-board': '🕰️',
-	'shanghai': '🏯',
-	'bobs27': '☠️',
-	'cricket': '🏏'
-};
-
 // --- PRIVATE HELPER: SPEICHERN & LADEN ---
 
 function _loadSettings() {
@@ -94,94 +85,6 @@ function _saveSettings() {
 }
 
 // --- PRIVATE RENDER-FUNKTIONEN ---
-
-function _renderGameSelector() {
-	// HueService.setMood('match-setup');
-    const grid = document.getElementById('game-selector-grid');
-    if(!grid) return;
-    grid.innerHTML = '';
-    
-    // Definition der Spiele mit Positionierung im 6-Spalten-Grid
-    // Grid-System: Spalte 1 bis 7 (weil 6 Spalten + 1 Endlinie)
-    const games = [
-        // ZEILE 1: X01 Mittig (Spalte 3 & 4)
-        { 
-            id: 'x01', 
-            colClass: 'grid-col-center', // CSS Klasse für 3 / span 2
-            style: 'grid-column: 3 / span 2;' 
-        },
-        
-        // ZEILE 2: Cricket (Links-Mitte) & Bobs27 (Rechts-Mitte)
-        { 
-            id: 'cricket', 
-            style: 'grid-column: 2 / span 2;' 
-        },
-        { 
-            id: 'bobs27', 
-            style: 'grid-column: 4 / span 2;' 
-        },
-
-        // ZEILE 3: Training, Shanghai, ATB (Volle Breite verteilt)
-        { 
-            id: 'single-training', 
-            style: 'grid-column: 1 / span 2;' 
-        },
-        { 
-            id: 'shanghai', 
-            style: 'grid-column: 3 / span 2;' 
-        },
-        { 
-            id: 'around-the-board', 
-            style: 'grid-column: 5 / span 2;' 
-        }
-    ];
-    
-    // Beschreibungen (Hardcoded oder aus Config)
-    const descriptions = {
-        'x01': 'Der Klassiker. 501, 301, Double Out.',
-        'cricket': 'Taktik & Präzision auf 15-20 & Bull.',
-        'bobs27': 'Doppel-Training für Profis.',
-        'single-training': 'Freies Wurftraining.',
-        'shanghai': 'Rundenbasiert auf Highscore.',
-        'around-the-board': 'Einmal um die Scheibe.'
-    };
-
-    games.forEach(g => {
-        const gKey = g.id;
-        const div = document.createElement('div');
-        div.className = 'dashboard-card game-card'; // Neue Klasse game-card für einheitliche Höhe
-        
-        // Style direkt setzen für das Grid
-        if (g.style) div.style.cssText = g.style;
-        
-        // Aktive Auswahl visualisieren
-        if (gKey === selectedGameType) {
-            div.classList.add('selected'); // Besser als Inline-Styles -> siehe CSS unten
-            div.style.border = '2px solid var(--accent-color)';
-            div.style.background = 'linear-gradient(145deg, var(--panel-color), #1a2e24)';
-        }
-
-        const label = UI.getGameLabel(gKey);
-        const desc = descriptions[gKey] || "Spielmodus";
-        const icon = GAME_ICONS[gKey] || '🎯';
-        
-        div.innerHTML = `
-            <div class="card-icon">${icon}</div>
-            <div class="card-content">
-                <div class="card-title">${label}</div>
-                <div class="card-sub">${desc}</div>
-            </div>
-        `;
-        
-        div.onclick = () => {
-            selectedGameType = gKey;
-            _saveSettings(); 
-            UI.showScreen('screen-match-setup');
-            _initMatchSetup();
-        };
-        grid.appendChild(div);
-    });
-}
 
 function _initMatchSetup() {
     _renderSetupLists();
@@ -712,11 +615,6 @@ export const Setup = {
         _loadSettings();
     },
 
-    showGameSelector: function() {
-        _renderGameSelector();
-        UI.showScreen('screen-game-selector');
-    },
-
     openSetupForCurrent: function() {
 		HueService.setMood('match-setup');
         // NEU: Dynamische Erkennung des aktuellen Spiels
@@ -730,7 +628,23 @@ export const Setup = {
         _initMatchSetup(); 
         UI.showScreen('screen-match-setup');
     },
-
+	
+	selectGameAndOpenSetup: function(gameId) {
+        console.log("Dashboard wählt Spiel:", gameId);
+        
+        // 1. Die private Variable 'selectedGameType' aktualisieren
+        selectedGameType = gameId;
+        
+        // 2. Einstellung speichern (damit sie beim Reload bleibt)
+        _saveSettings();
+        
+        // 3. Direkt zum Match-Setup navigieren
+        UI.showScreen('screen-match-setup');
+        
+        // 4. Die Optionen für das gewählte Spiel rendern
+        _initMatchSetup();
+    },
+	
     handleStartMatch: function() {
         // 1. Prüfen, ob Spieler ausgewählt wurden
         if(setupLineup.length === 0) { 

@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/layouts.css">
     <link rel="stylesheet" href="css/game.css">
+	<link rel="stylesheet" href="css/mgmt.css">
+	<link rel="stylesheet" href="css/dashboard.css">
+	<link rel="stylesheet" href="css/setup-theme.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#00d26a">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -81,45 +84,8 @@
         </div>
         
         <div id="screen-dashboard" class="screen hidden">
-            <div class="dashboard-header">
-                <h3>Zeit für das nächste Level, mein kleiner Padavan!</h3>
-                <p style="color:#888; font-size:0.9rem;"><h5>Jeder Dart zählt. Egal ob du an deinem Average feilst oder die Doppel trainierst – </br>heute ist der Tag, an dem du besser wirst als gestern. Ran an das Board!</h5></p>
-            </div>
-
-            <div class="dashboard-grid">
-                <div id="dash-btn-play" class="dashboard-card accent-card">
-                    <div class="card-icon">🎯</div>
-                    <div class="card-content">
-                        <div class="card-title">Freies Spiel</div>
-                        <div class="card-sub">X01, Cricket, ATC, Bob's 27...</div>
-                    </div>
-                </div>
-
-                <div id="dash-btn-training" class="dashboard-card">
-                    <div class="card-icon">💪</div>
-                    <div class="card-content">
-                        <div class="card-title">Trainingspläne</div>
-                        <div class="card-sub">Routinen & Workouts</div>
-                    </div>
-                </div>
-
-                <div id="dash-btn-stats" class="dashboard-card">
-                    <div class="card-icon">📊</div>
-                    <div class="card-content">
-                        <div class="card-title">Statistik</div>
-                        <div class="card-sub">Fortschritt prüfen</div>
-                    </div>
-                </div>
-
-                <div id="dash-btn-settings" class="dashboard-card">
-                    <div class="card-icon">⚙️</div>
-                    <div class="card-content">
-                        <div class="card-title">Verwaltung</div>
-                        <div class="card-sub">Spieler & App</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+			<div id="dashboard-content"></div>
+		</div>
 
         <div id="screen-match-setup" class="screen hidden">
             <div class="setup-main-container" style="margin-top: 20px;">
