@@ -7,7 +7,12 @@ import { Shanghai } from './shanghai.js';
 import { Bobs27 } from './bobs27.js';
 import { Cricket } from './cricket.js';
 import { AroundTheBoard } from './around-the-board.js';
+import { CheckoutChallenge } from './checkout-challenge.js';
+import { HalveIt } from './halve-it.js';
+import { ScoringDrill } from './scoring-drill.js';
 import { UI } from '../ui/ui-core.js';
+// NEU: Zugriff auf Management Settings
+import { Management } from '../ui/ui-mgmt.js';
 
 const STRATEGY_MAP = {
     'x01': X01,
@@ -15,7 +20,10 @@ const STRATEGY_MAP = {
     'shanghai': Shanghai,
     'bobs27': Bobs27,
 	'cricket': Cricket,
-	'around-the-board': AroundTheBoard
+	'around-the-board': AroundTheBoard,
+	'checkout-challenge': CheckoutChallenge,
+	'halve-it': HalveIt,
+	'scoring-drill': ScoringDrill
 };
 
 // --- PRIVATE VARS ---
@@ -26,11 +34,6 @@ function _getStrategy(gameId) {
     return STRATEGY_MAP[gameId] || null;
 }
 
-/**
- * Ermittelt das aktuelle Ziel (Target) für den aktiven Spieler.
- * Wird von normalizeDart() benötigt für Training/Shanghai/ATB/Bob's27,
- * wo das Keypad kein Segment liefert, sondern nur {multiplier} oder 'HIT'.
- */
 function _getCurrentTarget(session) {
     const player = session.players[session.currentPlayerIndex];
     const roundIdx = player.turns.length;
@@ -50,8 +53,20 @@ function _pushUndoState(session) {
     if (session.historyStack.length > 50) session.historyStack.shift();
 }
 
-function _triggerAnimation(type, duration = 1000, callback) {
+// NEU: Duration wird aus Settings gelesen, falls nicht explizit übergeben
+function _triggerAnimation(type, duration = null, callback) {
     isLocked = true;
+    
+    // Fallback auf Settings oder Hardcoded Default
+    let animDuration = duration;
+    if (!animDuration) {
+        try {
+            const settings = Management.getSettings();
+            animDuration = settings.overlayDuration || 1200;
+        } catch (e) {
+            animDuration = 1200;
+        }
+    }
     
     State.updateSessionState({ animation: type });
     UI.updateGameDisplay();
@@ -61,7 +76,7 @@ function _triggerAnimation(type, duration = 1000, callback) {
         isLocked = false;
         UI.updateGameDisplay();
         if (callback) callback();
-    }, duration);
+    }, animDuration);
 }
 
 function _nextTurn(session) {
@@ -123,9 +138,14 @@ export const GameEngine = {
 
     getCheckoutGuide(score, dartsLeftInTurn) {
         const session = State.getActiveSession();
-        if(session && session.gameId === 'x01') {
-             return X01.getCheckoutGuide(score, dartsLeftInTurn);
+        if (!session) return "";
+
+        // Generische Lösung: Wir fragen die aktuelle Strategie, ob sie eine Hilfe hat
+        const strategy = _getStrategy(session.gameId);
+        if (strategy && typeof strategy.getCheckoutGuide === 'function') {
+             return strategy.getCheckoutGuide(score, dartsLeftInTurn);
         }
+        
         return "";
     },  
 
@@ -160,12 +180,6 @@ export const GameEngine = {
         UI.switchToGame();
     },
 
-    /**
-     * ZENTRALE INPUT METHODE (Step 6: Event-Bus + Step 7a: Dart-Model)
-     * 
-     * Jeder Input (Keypad, Autodarts) wird durch normalizeDart() in ein
-     * universelles Dart-Objekt umgewandelt, bevor er an die Strategy geht.
-     */
     onInput(value) {
         if (isLocked) return; 
 
@@ -179,7 +193,6 @@ export const GameEngine = {
         const strategy = _getStrategy(session.gameId);
         if (!strategy) return;
 
-        // 1. Snapshot für Undo
         _pushUndoState(session);
     
         const pIdx = session.currentPlayerIndex;
@@ -187,9 +200,6 @@ export const GameEngine = {
         
         if (player.finished) { _nextTurn(session); return; }
 
-        // 2. INPUT NORMALISIEREN (Step 7a: Unified Dart Model)
-        //    Wandelt JEDES Format (String, Object, Autodarts) in ein
-        //    universelles Dart-Objekt um, bevor die Strategy es bekommt.
         const target = _getCurrentTarget(session);
         const dart = normalizeDart(value, {
             target: target,
@@ -197,10 +207,8 @@ export const GameEngine = {
             source: session.useAutodarts ? 'autodarts' : 'keypad'
         });
 
-        // 3. DELEGATION an Strategy (bekommt jetzt immer ein Dart-Objekt)
         const result = strategy.handleInput(session, player, dart);
 
-        // 4. EVENT EMITTIEREN (Step 6: Event-Bus)
         EventBus.emit('GAME_EVENT', {
             type: 'input-processed',
             overlay: result.overlay || null,
@@ -210,15 +218,20 @@ export const GameEngine = {
             lastTurnScore: _getLastTurnScore(player, session.gameId)
         });
 
-        // 5. UI FEEDBACK (Overlay)
         if (result.overlay) {
             UI.showOverlay(result.overlay.text, result.overlay.type);
         }
 
-        // 6. AKTION AUSFÜHREN
+        // NEU: Management Settings lesen für Overlay Duration
+        let overlayMs = 1200; 
+        try {
+            overlayMs = Management.getSettings().overlayDuration || 1200;
+        } catch(e) { /* Fallback */ }
+
         switch (result.action) {
             case 'BUST':
-                _triggerAnimation('BUST', 1500, () => {
+                // BUST ist oft etwas länger, wir nehmen overlayMs + 300
+                _triggerAnimation('BUST', overlayMs + 300, () => {
                     State.updateSessionState({ tempDarts: [] }); 
                     _nextTurn(session);
                 });
@@ -326,12 +339,6 @@ export const GameEngine = {
     }
 };
 
-// --- PRIVATE HELPER ---
-
-/**
- * Ermittelt den Score des letzten abgeschlossenen Turns (3 Darts).
- * Wird für den Highscore-Check bei X01/Training gebraucht.
- */
 function _getLastTurnScore(player, gameId) {
     const isScoreBased = ['bobs27', 'shanghai', 'cricket', 'around-the-board'].includes(gameId);
     if (isScoreBased) return null;

@@ -1,5 +1,7 @@
 import { State } from '../core/state.js';
 import { UI } from './ui-core.js';
+import { TRAINING_PLANS } from '../games/training-plans.js';
+import { Setup } from './ui-setup.js';
 
 // ─── GAME METADATA ─────────────────────────────────────────────
 const GAMES = {
@@ -12,6 +14,14 @@ const GAMES = {
     'shanghai':         { label: 'Shanghai',         category: 'training', accent: '#f59e0b', icon: '🀄', desc: 'S+D+T = Sofort-Sieg!' },
     'bobs27':           { label: "Bob's 27",         category: 'training', accent: '#ef4444', icon: '🔴', desc: 'Doubles unter Druck' },
     'around-the-board': { label: 'Around the Board', category: 'training', accent: '#06b6d4', icon: '🔄', desc: '1–20 + Bull · Darts zählen' },
+	'checkout-challenge': { label: 'Checkout Challenge', category: 'training', accent: '#e11d48', icon: '🔥', desc: 'Checke 80, 130, 170... in 9 Darts!' },
+	'halve-it': { label: 'Halve It', category: 'training', accent: '#f59e0b', icon: '✂️', desc: 'Triff oder dein Score wird halbiert!' },
+	'scoring-drill': { label: 'Scoring Drill', category: 'training', accent: '#0ea5e9', icon: '📈', desc: '99 Darts Highscore Jagd' },
+	
+	// ── PLÄNE ──
+    'warmup-quick': { label: 'Quick Warm-Up', category: 'plan', accent: '#8b5cf6', icon: '🔥', desc: '10 Min · Scoring & ATB' },
+    'checkout-pro': { label: 'Finishing School', category: 'plan', accent: '#10b981', icon: '🎯', desc: '20 Min · Checkouts & Bobs' },
+    'full-workout': { label: 'The Grinder', category: 'plan', accent: '#6366f1', icon: '💪', desc: '45 Min · Das Komplettprogramm' },
 };
 
 // ─── PRIVATE STATE ─────────────────────────────────────────────
@@ -161,22 +171,32 @@ export const Dashboard = {
     },
 
     _renderTrainingPlanSection() {
+        const planGames = Object.entries(GAMES).filter(([, g]) => g.category === 'plan');
+        if (planGames.length === 0) return '';
+
+        const cards = planGames.map(([id, game]) => {
+            return this._renderTrainingPlanCard(id, game);
+        }).join('');
+
         return `
             <div class="dash-section">
                 <div class="dash-section-header">
                     <span class="dash-section-icon">📋</span>
                     <h3 class="dash-section-title">TRAININGSPLÄNE</h3>
-                    <span class="dash-coming-soon">COMING SOON</span>
                 </div>
-                <div class="dash-plan-card">
-                    <div class="dash-plan-body">
-                        <div class="dash-plan-icon">📋</div>
-                        <div class="dash-plan-text">
-                            <strong>Kuratierte Trainingsroutinen</strong>
-                            <p>Kombiniere verschiedene Übungen zu strukturierten Sessions. 
-                            Double Mastery, Checkout Challenge, Warm-Up Routinen und mehr.</p>
-                        </div>
-                    </div>
+                <div class="dash-training-grid">${cards}</div>
+            </div>
+        `;
+    },
+	
+	_renderTrainingPlanCard(planId, game) {
+        return `
+            <div class="dash-card dash-card-training dash-card-plan" data-plan="${planId}" style="--card-accent: ${game.accent}">
+                <div class="dash-tcard-icon">${game.icon}</div>
+                <div class="dash-tcard-label">${game.label}</div>
+                <div class="dash-tcard-desc">${game.desc}</div>
+                <div class="dash-tcard-stat" style="margin-top:auto; font-size:0.8rem; opacity:0.8;">
+                    Kuratierter Plan
                 </div>
             </div>
         `;
@@ -202,7 +222,7 @@ export const Dashboard = {
     // ═══════════════════════════════════════════════════════════
 
     _bindEvents() {
-        // Player selector
+        // 1. Player selector
         const select = document.getElementById('dash-player-select');
         if (select) {
             select.onchange = (e) => {
@@ -211,7 +231,7 @@ export const Dashboard = {
             };
         }
 
-        // Game cards → open Setup for that game
+        // 2. REGULÄRE SPIELE (Match & Training) - DAS FEHLTE
         document.querySelectorAll('.dash-card[data-game]').forEach(card => {
             card.onclick = () => {
                 const gameId = card.dataset.game;
@@ -219,7 +239,23 @@ export const Dashboard = {
             };
         });
 
-        // Quick nav
+        // 3. TRAININGSPLÄNE (Neu)
+        document.querySelectorAll('.dash-card[data-plan]').forEach(card => {
+            card.onclick = () => {
+                const planId = card.dataset.plan;
+                // Den echten Plan aus der Import-Datei suchen
+                const plan = TRAINING_PLANS.find(p => p.id === planId);
+				const currentPlayerId = activePlayerId || this.getActivePlayerId();
+                
+                if (plan && Setup.showPlanPreview) {
+                    Setup.showPlanPreview(plan, currentPlayerId);
+                } else {
+                    console.warn("Plan Preview not available or plan not found");
+                }
+            };
+        });
+
+        // 4. Quick nav Buttons
         const btnStats = document.getElementById('dash-go-stats');
         if (btnStats) {
             btnStats.onclick = () => {
@@ -298,6 +334,11 @@ export const Dashboard = {
                 if (scores.length === 0) return { label: `${games.length} Spiele`, time };
                 const best = Math.min(...scores);
                 return { label: `⚡ ${best} Darts`, time };
+            }
+			case 'checkout-challenge': {
+                // Wir zeigen die Rate an, z.B. "50% Checkouts"
+                const rate = latest.stats?.summary?.checkoutRate || "0%";
+                return { label: `Rate: ${rate}`, time };
             }
             default:
                 return { label: `${games.length} Spiele`, time };

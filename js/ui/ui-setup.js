@@ -3,65 +3,77 @@ import { GameEngine } from '../games/game-engine.js';
 import { UI } from './ui-core.js';
 import { HueService } from '../core/hue-service.js';
 import { AutodartsService } from '../core/autodarts-service.js';
-
-// HINWEIS: Training Plans für Clean Sweep Phase deaktiviert
-// import { TRAINING_PLANS } from '../core/training-plans.js'; 
+import { Management } from './ui-mgmt.js';
+import { TrainingManager } from '../core/training-manager.js';
 
 // --- PRIVATE STATUS-VARIABLEN ---
 const STORAGE_KEY_SETTINGS = 'dart_coach_settings_v2';
 const STORAGE_KEY_LINEUP = 'dart_coach_global_lineup';
 
-// Clean Sweep: Wir erzwingen 'x01' als Standard
 let selectedGameType = 'x01';
 let useAutodarts = false;
 let setupLineup = []; 
 
-// Standardwerte für X01
-let x01Settings = { 
-    startScore: 501,
-    doubleIn: false,
-    doubleOut: true,
-    mode: 'legs', 
-    bestOf: 3 
-};
-
-let singleTrainingSettings = {
-    mode: 'ascending' // Standard: Aufsteigend
-};
-
-let shanghaiSettings = {
-    mode: 'ascending', // ascending, descending, random
-    length: 'standard' // standard (1-7), full (1-20)
-};
-
-let atbSettings = {
-    direction: 'ascending', // ascending, descending, random
-    variant: 'full'         // full, single-inner, single-outer, double, triple
-};
-
-let cricketSettings = {
-    mode: 'standard', // 'standard' oder 'cutthroat' (V2.1)
-    spRounds: 20      // Singleplayer Rundenlimit
-};
+// Basis-Werte (werden durch Management-Defaults überschrieben)
+let x01Settings = { startScore: 501, doubleIn: false, doubleOut: true, mode: 'legs', bestOf: 3 };
+let singleTrainingSettings = { mode: 'ascending' };
+let shanghaiSettings = { mode: 'ascending', length: 'standard' };
+let atbSettings = { direction: 'ascending', variant: 'full' };
+let cricketSettings = { mode: 'standard', spRounds: 20 };
+let checkoutSettings = { difficulty: 'standard', rounds: 10, doubleOut: true };
+let halveItSettings = { mode: 'standard', direction: 'descending' };
+let scoringSettings = { dartLimit: 99 };
 
 // --- PRIVATE HELPER: SPEICHERN & LADEN ---
 
+function _getDefaultSettings(gameId) {
+    try {
+        const defaults = Management.getSettings().defaults;
+        return defaults && defaults[gameId] ? defaults[gameId] : {};
+    } catch (e) {
+        console.warn("Konnte Management Defaults nicht laden", e);
+        return {};
+    }
+}
+
 function _loadSettings() {
     try {
+        // 1. Browser-Storage laden (NUR für Spielauswahl & Lineup, NICHT für Regeln)
         const rawSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
         if (rawSettings) {
             const data = JSON.parse(rawSettings);
-            // Wir ignorieren alte 'gameType' Werte und bleiben bei X01
-            if (data.x01) x01Settings = { ...x01Settings, ...data.x01 };
-			if (data.cricket) cricketSettings = { ...cricketSettings, ...data.cricket };
-			if (data.atb) atbSettings = { ...atbSettings, ...data.atb };
+            // Wir merken uns nur, welches Spiel zuletzt offen war
+            if (data.gameType) selectedGameType = data.gameType;
+            
+            // HIER WURDE GEÄNDERT: Wir laden NICHT mehr die alten Regel-Einstellungen (data.x01 etc.)
+            // Damit verhindern wir, dass alte "Last Played"-Settings die Management-Vorgaben überschreiben.
         }
 
+        // 2. Management-Defaults strikt anwenden (Source of Truth)
+        const defX01 = _getDefaultSettings('x01');
+        const defCricket = _getDefaultSettings('cricket');
+        const defShanghai = _getDefaultSettings('shanghai');
+        const defATB = _getDefaultSettings('around-the-board');
+        const defSingle = _getDefaultSettings('single-training');
+		const defCheckout = _getDefaultSettings('checkout-challenge');
+		const defHalveIt = _getDefaultSettings('halveIt');
+		const defScoring = _getDefaultSettings('scoring-drill');
+
+        // Defaults drüberbügeln (Deep Merge ist hier nicht nötig, flaches Merge reicht für Settings-Objekte)
+        if(Object.keys(defX01).length) x01Settings = { ...x01Settings, ...defX01 };
+        if(Object.keys(defCricket).length) cricketSettings = { ...cricketSettings, ...defCricket };
+        if(Object.keys(defShanghai).length) shanghaiSettings = { ...shanghaiSettings, ...defShanghai };
+        if(Object.keys(defATB).length) atbSettings = { ...atbSettings, ...defATB };
+        if(Object.keys(defSingle).length) singleTrainingSettings = { ...singleTrainingSettings, ...defSingle };
+		if(Object.keys(defCheckout).length) checkoutSettings = { ...checkoutSettings, ...defCheckout };
+		if(Object.keys(defHalveIt).length) halveItSettings = { ...halveItSettings, ...defHalveIt };
+		if(Object.keys(defScoring).length) scoringSettings = { ...scoringSettings, ...defScoring };
+		
+        // 3. Lineup laden (Spieler sollen erhalten bleiben)
         const rawLineup = localStorage.getItem(STORAGE_KEY_LINEUP);
         if (rawLineup) {
             const savedLineup = JSON.parse(rawLineup);
             const allAvailableIds = State.getAvailablePlayers().map(p => p.id);
-            // Nur IDs übernehmen, die es noch gibt
             setupLineup = savedLineup.filter(id => allAvailableIds.includes(id));
         }
     } catch (e) {
@@ -71,11 +83,16 @@ function _loadSettings() {
 
 function _saveSettings() {
     try {
+        // Wir speichern weiterhin alles, damit der Reload (F5) theoretisch den State kennt,
+        // aber _loadSettings ignoriert die Details beim nächsten Start bewusst.
         const settingsData = {
             gameType: selectedGameType,
             x01: x01Settings,
 			cricket: cricketSettings,
-			atb: atbSettings
+			atb: atbSettings,
+			checkout: checkoutSettings,
+			halveIt: halveItSettings,
+			scoring: scoringSettings
         };
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settingsData));
         localStorage.setItem(STORAGE_KEY_LINEUP, JSON.stringify(setupLineup));
@@ -89,7 +106,6 @@ function _saveSettings() {
 function _initMatchSetup() {
     _renderSetupLists();
     
-    // Options-Wrapper immer anzeigen (da keine Trainingspläne mehr stören)
     const optWrapper = document.getElementById('setup-options-wrapper');
     if(optWrapper) {
         optWrapper.style.display = 'block';
@@ -101,21 +117,17 @@ function _renderSetupOptions() {
     const c = document.getElementById('setup-options-container');
     if(!c) return;
 
-    // SICHERUNG: Start-Button retten, bevor wir den Container leeren!
-    // Wir entfernen ihn temporär aus dem DOM, damit innerHTML='' ihn nicht zerstört.
     const startBtn = document.getElementById('btn-start-match');
     if (startBtn && startBtn.parentElement) {
         startBtn.parentElement.removeChild(startBtn);
     }
     
-    // Alten Footer ausblenden (falls er noch sichtbar ist)
     const footer = document.querySelector('.setup-footer');
     if(footer) footer.style.display = 'none';
 
-    // Container leeren
     c.innerHTML = '';
 
-    // --- 1. HEADER TOOLBAR (Neu) ---
+    // --- 1. HEADER TOOLBAR ---
     const headerRow = document.createElement('div');
     headerRow.style.display = 'flex';
     headerRow.style.justifyContent = 'space-between';
@@ -123,28 +135,24 @@ function _renderSetupOptions() {
     headerRow.style.marginBottom = '25px';
     headerRow.style.paddingBottom = '15px';
     headerRow.style.borderBottom = '1px solid #444';
-    headerRow.style.flexWrap = 'wrap'; // Falls es doch mal zu eng wird
+    headerRow.style.flexWrap = 'wrap'; 
     headerRow.style.gap = '15px';
 
-    // --- GRUPPE LINKS: Start & Titel ---
     const leftGrp = document.createElement('div');
     leftGrp.style.display = 'flex';
     leftGrp.style.alignItems = 'center';
     leftGrp.style.gap = '15px';
 
-    // A) Game On Button einfügen
     if(startBtn) {
-        // Style-Anpassung für den Header (kompakter, aber gleicher Look)
         startBtn.style.width = 'auto';
         startBtn.style.margin = '0';
-        startBtn.style.padding = '10px 25px'; // Kompakter als im Footer
+        startBtn.style.padding = '10px 25px'; 
         startBtn.style.fontSize = '1rem';
         startBtn.style.minWidth = '140px';
         startBtn.innerHTML = "GAME ON 🚀"; 
         leftGrp.appendChild(startBtn);
     }
 
-    // B) Spiel-Titel
     const gameLabel = UI.getGameLabel(selectedGameType);
     const title = document.createElement('span');
     title.style.fontSize = '1.3rem';
@@ -156,21 +164,18 @@ function _renderSetupOptions() {
 
     headerRow.appendChild(leftGrp);
 
-    // --- GRUPPE RECHTS: Autodarts & Info ---
     const rightGrp = document.createElement('div');
     rightGrp.style.display = 'flex';
     rightGrp.style.alignItems = 'center';
     rightGrp.style.gap = '10px';
 
-    // C) Autodarts Toggle
     const btnAuto = document.createElement('button');
-    btnAuto.className = 'opt-btn-big'; // Basis-Design beibehalten
-    // Manuelle Anpassung für Header
+    btnAuto.className = 'opt-btn-big'; 
     btnAuto.style.width = 'auto';
     btnAuto.style.minWidth = 'auto';
     btnAuto.style.padding = '10px 20px';
     btnAuto.style.fontSize = '0.9rem';
-    btnAuto.style.flex = 'none'; // Verhindert Strecken
+    btnAuto.style.flex = 'none'; 
     
     if(useAutodarts) {
         btnAuto.innerHTML = "📡 Autodarts: <b>AN</b>";
@@ -186,17 +191,15 @@ function _renderSetupOptions() {
     
     btnAuto.onclick = () => {
         useAutodarts = !useAutodarts;
-        _renderSetupOptions(); // Neu rendern
+        _renderSetupOptions(); 
     };
     rightGrp.appendChild(btnAuto);
 
-    // D) Info Button
     const config = GameEngine.getGameConfig(selectedGameType);
     const descText = (config && config.description) ? config.description : "Keine Beschreibung verfügbar.";
     
     const btnInfo = document.createElement('button');
     btnInfo.className = 'icon-btn-square';
-    // Etwas größer als Standard für bessere Touch-Bedienung im Header
     btnInfo.style.width = '44px';
     btnInfo.style.height = '44px';
     btnInfo.style.fontSize = '1.2rem';
@@ -214,11 +217,9 @@ function _renderSetupOptions() {
 
 
     // --- 2. SPIEL-OPTIONEN RENDERN ---
-    // (Unverändert, nur der Autodarts-Teil am Ende fällt weg)
     if (selectedGameType === 'x01') {
         _renderX01OptionsBig(c); 
     } 
-
 	else if (selectedGameType === 'single-training') {
         _renderSingleTrainingOptions(c);
     }
@@ -226,7 +227,6 @@ function _renderSetupOptions() {
         _renderShanghaiOptions(c);
     }
 	else if (selectedGameType === 'bobs27') {
-		// Bob's 27 hat meist fixe Regeln, wir zeigen nur eine Info an
 		const info = document.createElement('div');
 		info.className = 'opt-group-big';
 		info.innerHTML = '<p style="color:#888; text-align:center;">Starte mit 27 Punkten.<br>Triff die Doppel. Fehlwürfe kosten Punkte.<br>Fall nicht unter 0!</p>';
@@ -238,11 +238,178 @@ function _renderSetupOptions() {
 	else if (selectedGameType === 'around-the-board') {
         _renderAtbOptions(c);
     }
-    // (Alter Autodarts Block am Ende ist gelöscht)
+	else if (selectedGameType === 'checkout-challenge') {
+        _renderCheckoutChallengeOptions(c);
+    }
+	else if (selectedGameType === 'halve-it') {
+        _renderHalveItOptions(c);
+    }
+	else if (selectedGameType === 'scoring-drill') {
+    _renderScoringDrillOptions(c);
+	}
+}
+
+function _renderScoringDrillOptions(container) {
+    const grp = document.createElement('div'); 
+    grp.className = 'opt-group-big';
+    grp.innerHTML = '<span class="opt-label-big">Anzahl Darts</span>';
+    
+    const row = document.createElement('div'); 
+    row.className = 'opt-row-big';
+
+    const limits = [
+        { val: 33, label: '33 (Sprint)' },
+        { val: 66, label: '66 (Medium)' },
+        { val: 99, label: '99 (Classic)' }
+    ];
+
+    limits.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn-big ' + (scoringSettings.dartLimit === opt.val ? 'active' : '');
+        b.innerText = opt.label;
+        b.onclick = () => { 
+            scoringSettings.dartLimit = opt.val; 
+            _saveSettings();
+            _renderSetupOptions(); 
+        };
+        row.appendChild(b);
+    });
+    grp.appendChild(row);
+    container.appendChild(grp);
+}
+
+function _renderHalveItOptions(container) {
+    // 1. Modus (Länge)
+    const grpMode = document.createElement('div'); 
+    grpMode.className = 'opt-group-big';
+    grpMode.innerHTML = '<span class="opt-label-big">Länge</span>';
+    const rowMode = document.createElement('div'); rowMode.className = 'opt-row-big';
+
+    const modes = [
+        { id: 'standard', label: 'Standard (10)' },
+        { id: 'short',    label: 'Short (6)' },
+        { id: 'long',     label: 'Long (21) 🥵' }
+    ];
+
+    modes.forEach(m => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn-big ' + (halveItSettings.mode === m.id ? 'active' : '');
+        b.innerText = m.label;
+        b.onclick = () => { 
+            halveItSettings.mode = m.id; 
+            _saveSettings();
+            _renderSetupOptions(); 
+        };
+        rowMode.appendChild(b);
+    });
+    grpMode.appendChild(rowMode);
+    container.appendChild(grpMode);
+
+    // 2. Reihenfolge (NEU)
+    const grpDir = document.createElement('div'); 
+    grpDir.className = 'opt-group-big';
+    grpDir.innerHTML = '<span class="opt-label-big">Reihenfolge</span>';
+    const rowDir = document.createElement('div'); rowDir.className = 'opt-row-big';
+
+    const dirs = [
+        { id: 'descending', label: 'Absteigend ⬇' },
+        { id: 'ascending',  label: 'Aufsteigend ⬆' },
+        { id: 'random',     label: 'Zufällig 🎲' }
+    ];
+
+    dirs.forEach(d => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn-big ' + (halveItSettings.direction === d.id ? 'active' : '');
+        b.innerText = d.label;
+        b.onclick = () => { 
+            halveItSettings.direction = d.id; 
+            _saveSettings();
+            _renderSetupOptions(); 
+        };
+        rowDir.appendChild(b);
+    });
+    grpDir.appendChild(rowDir);
+    container.appendChild(grpDir);
+}
+
+function _renderCheckoutChallengeOptions(container) {
+    // 1. SCHWIERIGKEIT
+    const grpDiff = document.createElement('div'); 
+    grpDiff.className = 'opt-group-big';
+    grpDiff.innerHTML = '<span class="opt-label-big">Schwierigkeit</span>';
+    const rowDiff = document.createElement('div'); rowDiff.className = 'opt-row-big';
+    
+    const diffs = [
+		{ id: 'easy',     label: '🟢 Easy (40-80)' },
+		{ id: 'standard', label: '🟡 Normal (60-120)' },
+		{ id: 'hard',     label: '🔴 Hard (100-170)' }
+	];
+
+    diffs.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn-big ' + (checkoutSettings.difficulty === opt.id ? 'active' : '');
+        b.innerText = opt.label;
+        b.onclick = () => { 
+            checkoutSettings.difficulty = opt.id; 
+            _saveSettings(); // Optional, wenn du es persistieren willst
+            _renderSetupOptions(); 
+        };
+        rowDiff.appendChild(b);
+    });
+    grpDiff.appendChild(rowDiff);
+    container.appendChild(grpDiff);
+
+    // 2. ANZAHL RUNDEN
+    const grpLen = document.createElement('div'); 
+    grpLen.className = 'opt-group-big';
+    grpLen.innerHTML = '<span class="opt-label-big">Anzahl Checkouts</span>';
+    const rowLen = document.createElement('div'); rowLen.className = 'opt-row-big';
+    
+    [10, 20, 30].forEach(num => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn-big ' + (checkoutSettings.rounds === num ? 'active' : '');
+        b.innerText = num + " Stück";
+        b.onclick = () => { 
+            checkoutSettings.rounds = num; 
+            _saveSettings();
+            _renderSetupOptions(); 
+        };
+        rowLen.appendChild(b);
+    });
+    grpLen.appendChild(rowLen);
+    container.appendChild(grpLen);
+	
+	// 3. NEU: MODUS (Double Out / Single Out)
+    const grpMode = document.createElement('div'); 
+    grpMode.className = 'opt-group-big';
+    grpMode.innerHTML = '<span class="opt-label-big">Check Modus</span>';
+    const rowMode = document.createElement('div'); rowMode.className = 'opt-switch-row-big'; // Switch Style
+    
+    const btnDouble = document.createElement('button');
+    btnDouble.className = 'opt-btn-big ' + (checkoutSettings.doubleOut ? 'active' : '');
+    btnDouble.innerText = "Double Out";
+    btnDouble.onclick = () => { 
+        checkoutSettings.doubleOut = true; 
+        _saveSettings(); 
+        _renderSetupOptions(); 
+    };
+    
+    const btnSingle = document.createElement('button');
+    btnSingle.className = 'opt-btn-big ' + (!checkoutSettings.doubleOut ? 'active' : '');
+    btnSingle.innerText = "Single Out";
+    btnSingle.onclick = () => { 
+        checkoutSettings.doubleOut = false; 
+        _saveSettings(); 
+        _renderSetupOptions(); 
+    };
+    
+    rowMode.appendChild(btnDouble);
+    rowMode.appendChild(btnSingle);
+    grpMode.appendChild(rowMode);
+    container.appendChild(grpMode);
 }
 
 function _renderAtbOptions(container) {
-    // 1. REIHENFOLGE
     const grpDir = document.createElement('div'); 
     grpDir.className = 'opt-group-big';
     grpDir.innerHTML = '<span class="opt-label-big">Reihenfolge</span>';
@@ -261,7 +428,7 @@ function _renderAtbOptions(container) {
         b.innerText = opt.label;
         b.onclick = () => { 
             atbSettings.direction = opt.id; 
-            _saveSettings(); // Speichern nicht vergessen
+            _saveSettings(); 
             _renderSetupOptions(); 
         };
         rowDir.appendChild(b);
@@ -269,14 +436,12 @@ function _renderAtbOptions(container) {
     grpDir.appendChild(rowDir);
     container.appendChild(grpDir);
 
-    // 2. VARIANTE (ZIEL-SEGMENT)
     const grpVar = document.createElement('div'); 
     grpVar.className = 'opt-group-big';
     grpVar.innerHTML = '<span class="opt-label-big">Ziel-Segment</span>';
     const rowVar = document.createElement('div'); 
-    // Hier nutzen wir 'opt-row-wrap-big' falls vorhanden oder Style Anpassung für viele Buttons
     rowVar.className = 'opt-row-big'; 
-    rowVar.style.flexWrap = 'wrap'; // Damit Buttons umbrechen können
+    rowVar.style.flexWrap = 'wrap'; 
 
     const variants = [
         { id: 'full', label: 'Gesamtes Feld' },
@@ -290,7 +455,6 @@ function _renderAtbOptions(container) {
         const b = document.createElement('button');
         b.className = 'opt-btn-big ' + (atbSettings.variant === opt.id ? 'active' : '');
         b.innerText = opt.label;
-        // Etwas kleinerer Text für lange Labels, falls nötig
         b.style.fontSize = '0.9rem';
         b.onclick = () => { 
             atbSettings.variant = opt.id; 
@@ -303,11 +467,7 @@ function _renderAtbOptions(container) {
     container.appendChild(grpVar);
 }
 
-
-
 function _renderCricketOptions(container) {
-    // 1. Spielmodus (Standard / Cut Throat)
-    // Hinweis: Cut Throat ist erstmal disabled wie besprochen
     const grpMode = document.createElement('div'); 
     grpMode.className = 'opt-group-big';
     grpMode.innerHTML = '<span class="opt-label-big">Spielmodus</span>';
@@ -315,7 +475,6 @@ function _renderCricketOptions(container) {
     const rowMode = document.createElement('div'); 
     rowMode.className = 'opt-row-big';
     
-    // Standard Button
     const btnStd = document.createElement('button');
     btnStd.className = 'opt-btn-big ' + (cricketSettings.mode === 'standard' ? 'active' : '');
     btnStd.innerText = 'Standard';
@@ -325,7 +484,6 @@ function _renderCricketOptions(container) {
     };
     rowMode.appendChild(btnStd);
 
-    // Cut Throat Button (Disabled)
     const btnCut = document.createElement('button');
     btnCut.className = 'opt-btn-big';
     btnCut.innerText = 'Cut Throat';
@@ -337,11 +495,6 @@ function _renderCricketOptions(container) {
     grpMode.appendChild(rowMode);
     container.appendChild(grpMode);
 
-
-    // 2. Singleplayer Rundenlimit (Nur anzeigen wenn SP möglich, oder immer?)
-    // Da wir SetupLineup hier evtl. noch nicht final wissen, zeigen wir es immer an oder machen es optional.
-    // Dein Requirement war: "Anzahl als auswählbare Option im Options Screen"
-    
     const grpRounds = document.createElement('div'); 
     grpRounds.className = 'opt-group-big';
     grpRounds.innerHTML = '<span class="opt-label-big">Rundenlimit (1 Player)</span>';
@@ -350,14 +503,13 @@ function _renderCricketOptions(container) {
     rowRounds.className = 'opt-row-big';
     
     const roundOptions = [
-        { val: 0, label: '∞ Kein Limit' }, // Count Up
+        { val: 0, label: '∞ Kein Limit' }, 
         { val: 10, label: '⚡ 10 (Turbo)' },
-        { val: 20, label: 'Standard (20)' }, // Offizieller Softdart Standard oft 15 oder 20
+        { val: 20, label: 'Standard (20)' },
     ];
 
     roundOptions.forEach(opt => {
         const b = document.createElement('button');
-        // Fallback falls spRounds undefined ist (Standard 20)
         const current = cricketSettings.spRounds !== undefined ? cricketSettings.spRounds : 20;
         
         b.className = 'opt-btn-big ' + (current === opt.val ? 'active' : '');
@@ -374,7 +526,6 @@ function _renderCricketOptions(container) {
 }
 
 function _renderX01OptionsBig(container) {
-    // 1. START PUNKTE
     const grpScore = document.createElement('div'); grpScore.className = 'opt-group-big';
     grpScore.innerHTML = '<span class="opt-label-big">Start Punkte</span>';
     const rowScore = document.createElement('div'); rowScore.className = 'opt-row-big';
@@ -393,7 +544,6 @@ function _renderX01OptionsBig(container) {
     grpScore.appendChild(rowScore);
     container.appendChild(grpScore);
 
-    // 2. MODUS & LÄNGE
     const grpFmt = document.createElement('div'); grpFmt.className = 'opt-group-big';
     grpFmt.innerHTML = '<span class="opt-label-big">Modus & Länge</span>';
     const rowFmt = document.createElement('div'); rowFmt.className = 'opt-row-big';
@@ -428,7 +578,6 @@ function _renderX01OptionsBig(container) {
     grpFmt.appendChild(rowLen);
     container.appendChild(grpFmt);
 
-    // 3. CHECK IN / OUT
     const grpMode = document.createElement('div'); grpMode.className = 'opt-group-big';
     grpMode.innerHTML = '<span class="opt-label-big">Check In / Out</span>';
     const rowMode = document.createElement('div'); rowMode.className = 'opt-switch-row-big';
@@ -464,7 +613,6 @@ function _renderSingleTrainingOptions(container) {
     const row = document.createElement('div'); 
     row.className = 'opt-row-big';
     
-    // Die drei Modi als Buttons
     const modes = [
         { id: 'ascending', label: '📈 1 - 20' },
         { id: 'descending', label: '📉 20 - 1' },
@@ -473,13 +621,11 @@ function _renderSingleTrainingOptions(container) {
     
     modes.forEach(m => {
         const b = document.createElement('button');
-        // Checken, ob dieser Modus aktiv ist
         b.className = 'opt-btn-big ' + (singleTrainingSettings.mode === m.id ? 'active' : '');
         b.innerText = m.label;
         
         b.onclick = () => { 
             singleTrainingSettings.mode = m.id; 
-            // Neu rendern, um Active-Klasse zu aktualisieren
             _renderSetupOptions(); 
         };
         row.appendChild(b);
@@ -490,7 +636,6 @@ function _renderSingleTrainingOptions(container) {
 }
 
 function _renderShanghaiOptions(container) {
-    // 1. Modus (Auf/Ab/Zufall)
     const grpMode = document.createElement('div'); 
     grpMode.className = 'opt-group-big';
     grpMode.innerHTML = '<span class="opt-label-big">Reihenfolge</span>';
@@ -515,7 +660,6 @@ function _renderShanghaiOptions(container) {
     grpMode.appendChild(rowMode);
     container.appendChild(grpMode);
 
-    // 2. Länge (Standard vs Full)
     const grpLen = document.createElement('div'); 
     grpLen.className = 'opt-group-big';
     grpLen.innerHTML = '<span class="opt-label-big">Länge</span>';
@@ -550,13 +694,12 @@ function _renderSetupLists() {
 
     const allPlayers = State.getAvailablePlayers();
 
-    // Lineup rendern
     if(setupLineup.length === 0) {
         lineupList.innerHTML = '<div class="empty-state" style="color:#666; text-align:center; padding:20px; font-style:italic;">Leer</div>';
     } else {
         setupLineup.forEach((pId, index) => {
             const p = allPlayers.find(x => x.id === pId);
-            if(!p) return; // Falls Spieler gelöscht wurde
+            if(!p) return; 
 
             const item = document.createElement('div');
             item.className = 'player-setup-card'; 
@@ -575,7 +718,6 @@ function _renderSetupLists() {
         });
     }
 
-    // Pool rendern (nur Spieler, die nicht im Lineup sind)
     const available = allPlayers.filter(p => !setupLineup.includes(p.id));
     if(available.length === 0) {
         poolList.innerHTML = '<div class="empty-state" style="color:#666; text-align:center; padding:20px; font-style:italic;">Alle gewählt</div>';
@@ -605,10 +747,6 @@ function _shuffleLineup() {
     _renderSetupLists();
 }
 
-// Clean Sweep: Training Helper entfernt, da nicht genutzt.
-
-// --- PUBLIC INTERFACE ---
-// --- PUBLIC INTERFACE ---
 export const Setup = {
     init: function() {
         console.log("🛠 Setup Init");
@@ -617,42 +755,29 @@ export const Setup = {
 
     openSetupForCurrent: function() {
 		HueService.setMood('match-setup');
-        // NEU: Dynamische Erkennung des aktuellen Spiels
         const session = State.getActiveSession();
         if (session) {
             selectedGameType = session.gameId;
-            // Optional: Settings aus Session zurückladen, falls nötig
         } 
         
-        // Setup initialisieren und anzeigen
         _initMatchSetup(); 
         UI.showScreen('screen-match-setup');
     },
 	
 	selectGameAndOpenSetup: function(gameId) {
         console.log("Dashboard wählt Spiel:", gameId);
-        
-        // 1. Die private Variable 'selectedGameType' aktualisieren
         selectedGameType = gameId;
-        
-        // 2. Einstellung speichern (damit sie beim Reload bleibt)
         _saveSettings();
-        
-        // 3. Direkt zum Match-Setup navigieren
         UI.showScreen('screen-match-setup');
-        
-        // 4. Die Optionen für das gewählte Spiel rendern
         _initMatchSetup();
     },
 	
     handleStartMatch: function() {
-        // 1. Prüfen, ob Spieler ausgewählt wurden
         if(setupLineup.length === 0) { 
             UI.showMatchModal("KEINE SPIELER", "Bitte wähle mindestens einen Spieler für das Match aus.", "Oki doki."); 
             return;
         }
         
-        // 2. Autodarts Konfiguration
         if (useAutodarts) {
             console.log("📡 Starting with Autodarts enabled.");
             AutodartsService.enable((val) => GameEngine.onInput(val));
@@ -660,7 +785,6 @@ export const Setup = {
             AutodartsService.disable();
         }
         
-        // 3. Spiel starten
         let gameSettings = null;
 
         if (selectedGameType === 'x01') {
@@ -678,8 +802,16 @@ export const Setup = {
 		else if (selectedGameType === 'around-the-board') {
             gameSettings = atbSettings;
         }
+		else if (selectedGameType === 'checkout-challenge') {
+            gameSettings = checkoutSettings;
+        }
+		else if (selectedGameType === 'halve-it') {
+            gameSettings = halveItSettings;
+        }
+		else if (selectedGameType === 'scoring-drill') {
+			gameSettings = scoringSettings;
+		}
         else if (GameEngine.hasOptions(selectedGameType)) {
-            // Fallback für zukünftige Spiele
             if (typeof selectedGameOption !== 'undefined') {
                 gameSettings = selectedGameOption;
             }
@@ -688,12 +820,99 @@ export const Setup = {
         console.log(`🚀 Starting Game: ${selectedGameType}`);
         GameEngine.startGame(selectedGameType, setupLineup, gameSettings);
     },
+	
+	showPlanPreview: function(plan, preSelectedPlayerId) {
+		
+        let playerName = "Gast";
+        if (preSelectedPlayerId) {
+            const allPlayers = State.getAvailablePlayers();
+            const found = allPlayers.find(p => p.id === preSelectedPlayerId);
+            if (found) playerName = found.name;
+        }
+        
+        // Titel zusammenbauen
+        const title = `PLAN: ${plan.label.toUpperCase()}`;
+        
+        let body = `<div style="text-align:left; color:#ccc; font-size:0.95rem;">`;
+        
+        // --- NEU: Begrüßungs-Zeile ---
+        body += `
+            <div style="margin-bottom: 20px; padding-bottom:15px; border-bottom:1px solid #333;">
+                <span style="font-size:1.1rem; color:var(--text-main);">Hi <strong>${playerName}</strong>, bereit für dein Training?</span>
+            </div>
+        `;
+        
+        body += `<p style="margin-bottom:15px; font-style:italic; color:#888;">${plan.description}</p>`;
+        body += `<div style="background:#222; padding:10px; border-radius:8px; max-height: 250px; overflow-y: auto;">`;
+		
+        plan.blocks.forEach((block, index) => {
+            let gameName = block.gameId;
+            const map = {
+                'scoring-drill': '📈 Scoring Drill',
+                'halve-it': '✂️ Halve It',
+                'checkout-challenge': '🎯 Checkout Challenge',
+                'around-the-board': '🔄 Around The Board',
+                'bobs27': '🔴 Bobs 27',
+                'x01': '🎯 X01',
+                'cricket': '🏏 Cricket',
+                'single-training': '🎓 Single Training',
+                'shanghai': '🀄 Shanghai'
+            };
+            if(map[block.gameId]) gameName = map[block.gameId];
 
-    // DIESE FUNKTIONEN FEHLTEN UND HABEN DEN ABSTURZ VERURSACHT:
-    
+            body += `
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:4px;">
+                    <span>${index + 1}. ${gameName}</span>
+                    <span style="color:#888; font-size:0.8rem;">Block ${index + 1}</span>
+                </div>
+            `;
+        });
+        
+        body += `</div><p style="margin-top:10px; font-size:0.8rem; color:#666;">Dauer: ca. ${plan.duration}</p></div>`;
+
+        if (typeof UI.showConfirm === 'function') {
+            UI.showConfirm(
+                title, 
+                body, 
+                () => {
+                    // START LOGIK
+                    let playersToUse = [];
+
+                    // A) Hat das Dashboard uns einen Spieler geschickt? (Prio 1)
+                    if (preSelectedPlayerId) {
+                        playersToUse = [preSelectedPlayerId];
+                    } 
+                    // B) Fallback: Setup Lineup
+                    else if (setupLineup && setupLineup.length > 0) {
+                        playersToUse = [...setupLineup];
+                    }
+                    // C) Notfall-Fallback: Erster verfügbarer Spieler
+                    else {
+                        const all = State.getAvailablePlayers();
+                        if(all.length > 0) playersToUse.push(all[0].id);
+                    }
+
+                    if (playersToUse.length === 0) {
+                        alert("Kein Spieler gefunden.");
+                        return;
+                    }
+
+                    TrainingManager.startPlan(plan, playersToUse);
+                },
+                {
+                    confirmLabel: "STARTEN ▶",
+                    confirmClass: "btn-yes", 
+                    cancelLabel: "ZURÜCK",
+                    cancelClass: "btn-no" 
+                }
+            );
+        } else {
+            console.warn("UI.showConfirm nicht verfügbar");
+        }
+    },
+
     shuffle: _shuffleLineup,
     
-    // Wichtig: Muss den aktuellen selectedGameType zurückgeben!
     getCurrentGameType: () => selectedGameType,
     
     getCurrentSettings: () => {
@@ -702,10 +921,12 @@ export const Setup = {
         if (selectedGameType === 'shanghai') return shanghaiSettings;
         if (selectedGameType === 'single-training') return singleTrainingSettings;
 		if (selectedGameType === 'around-the-board') return atbSettings;
+		if (selectedGameType === 'checkout-challenge') return checkoutSettings;
+		if (selectedGameType === 'halve-it') return halveItSettings;
+		if (selectedGameType === 'scoring-drill') return scoringSettings;
         return {};
     },
     
-    // Platzhalter, da Training Plans aktuell deaktiviert sind
     loadNextTrainingBlock: function() { console.warn("Training disabled"); },
     isTrainingActive: () => false
 };

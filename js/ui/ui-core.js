@@ -17,7 +17,10 @@ const GAME_NAMES = {
 	'shanghai': 'Shanghai',
 	'cricket': 'Cricket',
 	'around-the-board': 'Around the Board',
-	'bobs27': "Bob's 27"
+	'bobs27': "Bob's 27",
+	'checkout-challenge': 'Checkout Challenge',
+	'halve-it': 'Halve It',
+	'scoring-drill': 'Scoring Drill'
     /* CLEAN SWEEP: Andere Spiele vorerst deaktiviert
     'warmup': 'Warmup Routine',
     'catch40': 'Catch 40',
@@ -86,8 +89,8 @@ function _getGameTitle() {
             let details = [];
             const modeLabel = settings.mode === 'sets' ? 'Sets' : 'Legs';
             details.push(`Best of ${settings.bestOf} ${modeLabel}`);
-            if (settings.doubleIn) details.push("DI");
-            if (settings.doubleOut) details.push("DO");
+            if (settings.doubleIn) details.push("Double In");
+            if (settings.doubleOut) details.push("Double Out");
             if (details.length > 0) title += ` (${details.join(', ')})`;
         }
         // --- AROUND THE BOARD LOGIK (NEU) ---
@@ -95,7 +98,7 @@ function _getGameTitle() {
             const v = settings.variant || 'full';
             const map = {
                 'full': 'Komplettes Segment',
-                'single-inner': 'InnerecSingles',
+                'single-inner': 'Innere Singles',
                 'single-outer': 'Äußere Singles',
                 'double': 'Nur Doubles',
                 'triple': 'Nur Triples'
@@ -104,6 +107,30 @@ function _getGameTitle() {
             const dirText = settings.direction === 'random' ? '🎲' : '';
             
             title = `ATB: ${variantText} ${dirText}`;
+        }
+		else if (type === 'checkout-challenge') {
+            let details = [];
+            
+            // 1. Schwierigkeit (Erster Buchstabe groß)
+            if (settings.difficulty) {
+                const diff = settings.difficulty.charAt(0).toUpperCase() + settings.difficulty.slice(1);
+                details.push(diff);
+            }
+            
+            // 2. Rundenanzahl
+            if (settings.rounds) {
+                details.push(`${settings.rounds} Runden`);
+            }
+            
+            // 3. Modus (Double Out / Single Out)
+            // Prüfen auf false, da undefined/true = Double Out ist
+            if (settings.doubleOut === false) {
+                details.push("Single Out");
+            } else {
+                details.push("Double Out");
+            }
+            
+            if (details.length > 0) title += ` (${details.join(', ')})`;
         }
         // --- CRICKET LOGIK ---
         else if (type === 'cricket') {
@@ -244,34 +271,7 @@ export const UI = {
         if(Auth) Auth.init();
         if(Setup) Setup.init();
 		window._dashModules = { Setup, Stats, Management };
-		// if(Keyboard) Keyboard.init();
-        // Mgmt & Stats brauchen kein Init beim Start, werden beim Klick initiiert
-        
-        // --- EVENT LISTENER ---
-
-        /* Dashboard Buttons
-        const btnPlay = document.getElementById('dash-btn-play'); 
-        if(btnPlay) btnPlay.addEventListener('click', () => { 
-            if(Setup) Setup.showGameSelector(); 
-        });
-        
-        const btnTrain = document.getElementById('dash-btn-training'); 
-        if(btnTrain) btnTrain.addEventListener('click', () => { 
-            this.showMatchModal("TRAININGSPLÄNE", "Dieses Feature befindet sich noch im Aufbau. Hier findest du bald kuratierte Routinen für dein Training.", "Oki doki."); 
-        });
-
-        const btnStats = document.getElementById('dash-btn-stats');
-        if(btnStats) btnStats.addEventListener('click', () => {
-            if (Stats) { Stats.init(); }
-            this.showScreen('screen-stats');
-        });
-
-        const btnSettings = document.getElementById('dash-btn-settings');
-        if(btnSettings) btnSettings.addEventListener('click', () => {
-            if (Management) { Management.init(); }
-            this.showScreen('screen-management');
-        });*/
-
+	
         // Setup Buttons
         const btnShuffle = document.getElementById('btn-shuffle-players'); 
         if(btnShuffle) btnShuffle.addEventListener('click', () => {
@@ -288,21 +288,7 @@ export const UI = {
         if(btnFinish) btnFinish.addEventListener('click', async () => { 
             const isGuest = this.isGuest(); 
             if(!isGuest) await State.saveActiveSession(); 
-            
-            // CLEAN SWEEP: Training Plans deaktiviert
-            /*
-            const activePlan = State.getActivePlan();
-            if (activePlan) {
-                const result = State.advancePlanBlock();
-                if (result.finished) { 
-                    this.showMatchModal("TRAINING BEENDET", "Alle Blöcke absolviert. Starke Leistung!", "ZUM MENÜ", () => { this.showScreen('screen-dashboard'); }); 
-                } else { 
-                    if(Setup) Setup.loadNextTrainingBlock(); 
-                }
-            } else { 
-                this.showScreen('screen-dashboard'); 
-            }
-            */
+			
             // Stattdessen direkt zum Dashboard:
 			this.showScreen('screen-dashboard');
         });
@@ -355,12 +341,6 @@ export const UI = {
                 text.innerText = "AUTODARTS: OFF";
             }
         });
-        
-        // CLEAN SWEEP: Input Toggle Button entfernt (nur noch ProKeypad)
-        /*
-        const btnToggle = document.getElementById('btn-toggle-input'); 
-        if(btnToggle) btnToggle.addEventListener('click', () => GameEngine.toggleInputMode());
-        */
 		
         this.showScreen('screen-login');
     },

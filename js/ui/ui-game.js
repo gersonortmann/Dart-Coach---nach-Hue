@@ -4,6 +4,7 @@ import { GameEngine } from '../games/game-engine.js';
 import { UI } from './ui-core.js';
 import { Keyboard } from './ui-keyboard.js';
 import { ResultScreen } from './ui-result.js';
+import { TrainingManager } from '../core/training-manager.js';
 
 export const Game = {
     
@@ -35,6 +36,16 @@ export const Game = {
         }
         
         this.updateGameDisplay(); 
+		
+		const btnRestart = document.getElementById('btn-restart');
+        if (btnRestart) {
+            // Wenn TrainingManager aktiv ist, Button verstecken, sonst zeigen
+            if (TrainingManager && TrainingManager.isActive()) {
+                btnRestart.style.display = 'none';
+            } else {
+                btnRestart.style.display = 'flex'; // oder 'block', je nach CSS
+            }
+        }
     },
 
     updateGameDisplay: function() {
@@ -47,11 +58,23 @@ export const Game = {
         const headerScore = document.getElementById('game-player-score');
         const matchInfo = document.getElementById('game-match-info');
         
-        if(headerName) headerName.innerText = player.name;
+        if(headerName) {
+            // Name + "ist am Wurf"
+            headerName.innerHTML = `<span style="font-size:2rem; font-weight:800; text-transform:uppercase;">${player.name}</span> <span style="font-size:1rem; color:#888; font-weight:normal;">ist am Wurf</span>`;
+        }
+        
         if(headerScore) {
-            headerScore.innerText = player.currentResidual;
+            // FIX: Unterscheidung zwischen Residual (X01) und Score (Halve It / Checkout)
+            let displayScore = player.currentResidual;
+            
+            if (session.gameId === 'halve-it' || session.gameId === 'checkout-challenge' || session.gameId === 'scoring-drill') {
+                displayScore = player.score;
+            }
+            
+            headerScore.innerText = (displayScore !== undefined && displayScore !== null) ? displayScore : 0;
             headerScore.style.color = 'var(--accent-color)'; 
         }
+        
         if(matchInfo) matchInfo.innerText = UI.getGameLabel(session.gameId);
 
         // Render Weiche
@@ -67,9 +90,18 @@ export const Game = {
         else if (session.gameId === 'bobs27') {
             this._renderBobs27(session);
         }
-		else if (session.gameId === 'around-the-board') {
+        else if (session.gameId === 'around-the-board') {
             this._renderAroundTheBoard(session);
         }
+        else if (session.gameId === 'checkout-challenge') {
+            this._renderCheckoutChallenge(session);
+        }
+        else if (session.gameId === 'halve-it') {
+            this._renderHalveIt(session);
+        }
+		else if (session.gameId === 'scoring-drill') {
+			this._renderScoringDrill(session);
+		}
         else {
             this._renderX01(session);
         }
@@ -110,8 +142,8 @@ export const Game = {
     },
 
 	/**
-     * CRICKET RENDERER
-     */
+    * CRICKET RENDERER
+    */
     _renderCricket: function(session) {
         const container = this._prepareTargetBox('cricket');
         const activePIdx = session.currentPlayerIndex;
@@ -119,15 +151,9 @@ export const Game = {
         const players = session.players;
         
         // --- HEADER UPDATE (NEU) ---
-        const headerName = document.getElementById('game-player-name');
-        const headerScore = document.getElementById('game-player-score'); // Nutzen wir jetzt für Runden
+        const headerScore = document.getElementById('game-player-score');
         const matchInfo = document.getElementById('game-match-info');
         
-        if(headerName) {
-            // Name + "ist am Wurf"
-            headerName.innerHTML = `<span style="font-size:2rem; font-weight:800; text-transform:uppercase;">${player.name}</span> <span style="font-size:1rem; color:#888; font-weight:normal;">ist am Wurf</span>`;
-        }
-
         // Runden-Anzeige
         if(headerScore) {
             let currentRound = player.turns.length + 1;
@@ -288,6 +314,220 @@ export const Game = {
         this._renderMultiplayerScoreboard(session);
     },
 
+	_renderScoringDrill: function(session) {
+        this._prepareTargetBox('standard');
+        const player = session.players[session.currentPlayerIndex];
+        
+        // Header Score setzen (WICHTIG: updateGameDisplay behandelt 'scoring-drill' bereits korrekt als Punktestand)
+        // Aber sicherheitshalber hier nochmal explizit:
+        const headerScore = document.getElementById('game-player-score');
+        if(headerScore) headerScore.innerText = player.score;
+
+        const targetValEl = document.getElementById('game-target-val');
+        const labelEl = document.getElementById('lbl-target-desc');
+        const hintContainer = document.getElementById('checkout-suggestion');
+        const scoreLabel = document.getElementById('lbl-turn-score');
+        const scoreVal = document.getElementById('turn-score-val');
+        
+        // 1. Hauptanzeige: Score
+        if (targetValEl) targetValEl.innerText = player.score;
+        if (labelEl) labelEl.innerText = "SCORE";
+
+        // 2. Info-Box: Darts Left
+        // Wir rechnen aus: Limit - (Geworfen + TempDarts)
+        const totalThrown = player.dartsThrown + (session.tempDarts ? session.tempDarts.length : 0);
+        const limit = player.dartLimit || 99;
+		const totalRounds = Math.floor(limit / 3);
+        
+        let currentRound = Math.floor(player.dartsThrown / 3) + 1;
+            
+            // ZEITMASCHINEN-LOGIK:
+            // Wenn wir gerade 3 Darts geworfen haben (Pause/Overlay), 
+            // ist dartsThrown schon 3, 6, 9... und currentRound wäre schon eins weiter.
+            // Wir wollen aber visuell noch in der alten Runde bleiben.
+            if (session.tempDarts && session.tempDarts.length === 3) {
+                currentRound--;
+            }
+            
+            // Begrenzung (falls wir genau am Ende sind)
+            if (currentRound > totalRounds) currentRound = totalRounds;
+            if (currentRound < 1) currentRound = 1; // Startfall
+
+            hintContainer.classList.remove('hidden');
+            hintContainer.innerText = `RUNDE ${currentRound} von ${totalRounds}`;
+            hintContainer.style.color = "#888";
+     
+
+        // 3. Runden-Score
+        if (scoreLabel) scoreLabel.innerText = "AUFNAHME";
+        const currentTurnScore = (session.tempDarts || []).reduce((a,b) => a+b.points, 0);
+        if (scoreVal) scoreVal.innerText = currentTurnScore;
+
+        // Header Meta leeren
+        const headerMeta = document.querySelector('.game-header-meta');
+        if(headerMeta) headerMeta.innerText = "";
+
+        this._updateDartBoxes(session);
+        this._renderMultiplayerScoreboard(session);
+    },
+	
+	_renderHalveIt: function(session) {
+        this._prepareTargetBox('standard');
+        
+        const player = session.players[session.currentPlayerIndex];
+        
+        // ZEITMASCHINEN-LOGIK:
+        let roundIdx = player.turns.length;
+        if (session.tempDarts && session.tempDarts.length === 3) {
+            roundIdx--; 
+        }
+        
+        // Schutz vor Index-Fehlern (falls roundIdx < 0 oder > max)
+        if (roundIdx < 0) roundIdx = 0;
+        const targetId = session.targets[roundIdx] || session.targets[session.targets.length-1];
+
+        // Mapping
+        const labelMap = {
+            'ANY_DOUBLE': 'Double',
+            'ANY_TRIPLE': 'Triple',
+            'BULL': 'BULL',
+            'ALL': 'ALLE'
+        };
+        const displayTarget = labelMap[targetId] || targetId;
+
+        // Elemente
+        const targetValEl = document.getElementById('game-target-val');
+        const labelEl = document.getElementById('lbl-target-desc');
+        const scoreLabel = document.getElementById('lbl-turn-score');
+		const hintContainer = document.getElementById('checkout-suggestion');
+        const headerScore = document.getElementById('game-player-score');
+        const headerMeta = document.querySelector('.game-header-meta');
+        
+        // 1. Ziel-Anzeige
+        if (targetValEl) targetValEl.innerText = displayTarget;
+        if (labelEl) labelEl.innerText = "ZIEL";
+		
+		// 2. Grüne Box: Runden-Info
+		if (hintContainer) {
+            hintContainer.classList.remove('hidden');
+            hintContainer.innerText = `Runde ${roundIdx + 1} von ${session.targets.length}`;
+            hintContainer.style.color = "#888"; // Dezent
+        }
+		
+        // 3. Header Bereinigung & Score
+        if (headerMeta) headerMeta.innerText = ""; 
+        if (headerScore) {
+            headerScore.innerText = player.score; 
+            headerScore.style.color = "var(--highlight-color)";
+        }
+
+        // 4. Info unten rechts (Punkte in dieser Aufnahme)
+        if (scoreLabel) scoreLabel.innerText = "RUNDEN-SCORE";
+        
+        const currentTurnScore = (session.tempDarts || []).reduce((sum, d) => sum + (d.isTargetHit ? d.points : 0), 0);
+        const scoreVal = document.getElementById('turn-score-val');
+        if (scoreVal) scoreVal.innerText = currentTurnScore;
+
+        const turnScoreBox = document.getElementById('target-row-score');
+        if (turnScoreBox) turnScoreBox.style.visibility = 'visible';
+
+        this._updateDartBoxes(session);
+        this._renderMultiplayerScoreboard(session);
+    },
+	
+	_renderCheckoutChallenge: function(session) {
+        this._prepareTargetBox('standard');
+
+        const player = session.players[session.currentPlayerIndex];
+        const targets = session.targets;
+        
+        // 1. Index-Stabilisierung (Time Machine)
+        let roundIdx = player._roundIdx || 0;
+
+        // Wenn wir Darts im Puffer haben (Overlay Phase), prüfen wir, ob wir zurückblicken müssen.
+        if (session.tempDarts && session.tempDarts.length > 0 && roundIdx > 0) {
+            // Wir berechnen hypothetisch: Was wäre das Ergebnis mit dem VORHERIGEN Ziel?
+            const prevTarget = targets[roundIdx - 1];
+            const thrown = session.tempDarts.reduce((a,b)=>a+b.points,0);
+            const diff = prevTarget - thrown;
+            
+            // Indikatoren, dass die Runde eigentlich schon vorbei ist (Engine hat hochgezählt):
+            const isCheck = (diff === 0);
+            const isBust = (diff < 0 || diff === 1);
+            const isFail = (session.tempDarts.length === 3); 
+
+            // Wenn eines davon zutrifft, zeigen wir visuell noch die ALTE Runde an
+            if (isCheck || isBust || isFail) {
+                roundIdx--;
+            }
+        }
+        
+        // Index begrenzen
+        if (roundIdx >= targets.length) roundIdx = targets.length - 1;
+
+        // 2. Werte ermitteln
+        // Da wir den Index jetzt stabilisiert haben, können wir einfach das Target aus dem Array nehmen.
+        // Das entspricht dem Startwert der Runde, die wir gerade anzeigen.
+        const startRes = targets[roundIdx];
+
+        // Punkte in der aktuellen Aufnahme
+        const thrownScore = (session.tempDarts || []).reduce((a,b) => a + b.points, 0);
+        
+        // Live-Restwert
+        const liveResidual = startRes - thrownScore;
+
+        // 3. UI Elemente
+        const targetValEl = document.getElementById('game-target-val');
+        const labelEl = document.getElementById('lbl-target-desc');
+        const hintContainer = document.getElementById('checkout-suggestion');
+        const headerScore = document.getElementById('game-player-score');
+        const turnScoreBox = document.getElementById('target-row-score');
+        
+        if (turnScoreBox) turnScoreBox.style.visibility = 'hidden'; 
+
+        // 4. Anzeige Targetbox (Stabilisiert)
+        if (targetValEl) {
+            targetValEl.innerText = liveResidual;
+        }
+
+        if (headerScore) headerScore.innerText = player.score;
+        
+        if (labelEl) {
+            labelEl.innerText = `RUNDE ${roundIdx + 1} von ${targets.length}`;
+        }
+
+        // 5. Checkout Guide
+        if (hintContainer) {
+            hintContainer.classList.remove('hidden');
+            const dartsThrown = session.tempDarts ? session.tempDarts.length : 0;
+            const dartsLeft = 3 - dartsThrown;
+			hintContainer.style.transition = "opacity 0.2s ease";
+
+            if (dartsLeft <= 0 || session.animation) { 
+                 hintContainer.style.opacity = '0';
+            } else {
+				hintContainer.style.opacity = '1';
+                if (liveResidual < 0 || liveResidual === 1) {
+                     hintContainer.innerText = "BUST";
+                     hintContainer.style.color = "var(--miss-color)";
+                } 
+                else {
+                    const guide = GameEngine.getCheckoutGuide(liveResidual, dartsLeft);
+                    if (guide && guide !== "") {
+                        hintContainer.innerText = guide;
+                        hintContainer.style.color = "var(--accent-color)"; 
+                    } else {
+                        hintContainer.innerText = "nicht checkbar"; 
+                        hintContainer.style.color = "#666"; 
+                    }
+                }
+            }
+        }
+        
+        this._updateDartBoxes(session);
+        this._renderMultiplayerScoreboard(session);
+    },
+
 	_renderAroundTheBoard: function(session) {
         this._prepareTargetBox('standard'); 
 
@@ -295,7 +535,7 @@ export const Game = {
         const targetValEl = document.getElementById('game-target-val');
         const hintContainer = document.getElementById('checkout-suggestion');
         const scoreVal = document.getElementById('turn-score-val');
-        
+       
         // Target Logic
         const currentIdx = player.currentResidual || 0;
         let targetText = "FINISH";
@@ -337,7 +577,7 @@ export const Game = {
 
         targetValEl.classList.remove('anim-bust', 'anim-miss', 'anim-check', 'bust-flash');
         document.getElementById('lbl-target-desc').innerText = "Ziel";
-
+		
         let currentTargetIndex = player.turns.length;
 		if (session.tempDarts && session.tempDarts.length === 3) {
             currentTargetIndex--;
@@ -369,7 +609,7 @@ export const Game = {
         const player = session.players[session.currentPlayerIndex];
         const targetValEl = document.getElementById('game-target-val');
         const hintContainer = document.getElementById('checkout-suggestion');
-        
+       
         let currentTargetIndex = player.turns.length; 
 		if (session.tempDarts && session.tempDarts.length === 3) {
             currentTargetIndex--;
@@ -398,7 +638,7 @@ export const Game = {
         
         const player = session.players[session.currentPlayerIndex];
         const targetValEl = document.getElementById('game-target-val');
-        
+		
         let currentTargetIndex = player.turns.length;
 		if (session.tempDarts && session.tempDarts.length > 0) {
             currentTargetIndex--;
@@ -479,10 +719,10 @@ export const Game = {
     },
 
     _renderMultiplayerScoreboard: function(session) {
-        // (Unverändert lassen, oder kopieren aus alter Datei)
         const sbContainer = document.getElementById('multiplayer-scoreboard');
         if (!sbContainer) return;
         sbContainer.innerHTML = '';
+        
         const inactivePlayers = session.players.filter((p, idx) => idx !== session.currentPlayerIndex);
         
         if (inactivePlayers.length === 0) {
@@ -492,13 +732,24 @@ export const Game = {
             inactivePlayers.forEach(p => {
                 const card = document.createElement('div');
                 card.className = 'player-mini-card';
-                let scoreVal = p.currentResidual;
-                // Bei Training/Shanghai "Pkt" anhängen
+                
+                // FIX: Score-Auswahl für Halve It / Checkout Challenge
+                let rawScore = p.currentResidual;
+                if (session.gameId === 'halve-it' || session.gameId === 'checkout-challenge' || session.gameId === 'scoring-drill') {
+                    rawScore = p.score;
+                }
+                
+                let scoreVal = String(rawScore !== undefined ? rawScore : 0);
+                
+                // Bei Training/Shanghai/Halve It "Pkt" anhängen
                 if(session.gameId !== 'x01' && session.gameId !== 'cricket') scoreVal += ' Pkt';
                 
                 let detailLine = "";
                 if(session.gameId === 'x01') {
                      detailLine = (session.settings.mode === 'sets') ? `S:${p.setsWon} L:${p.legsWon}` : `Legs: ${p.legsWon}`;
+                } else if (session.gameId === 'halve-it') {
+                     // Optional: Zeige "Halbiert: X mal"
+                     detailLine = `✂️ ${p.halvedCount || 0}`;
                 }
 
                 card.innerHTML = `

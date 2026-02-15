@@ -458,7 +458,7 @@ export const Management = {
         if (g.totalScore !== undefined) tags.push(`Score: ${g.totalScore}`);
 
         return `
-            <div class="mgmt-hcard" style="--ha: ${m.accent}">
+            <div class="mgmt-hcard" style="--ha: ${m.accent}; flex-shrink: 0;">
                 <div class="mgmt-hcard-bar"></div>
                 <div class="mgmt-hcard-body">
                     <div class="mgmt-hcard-top">

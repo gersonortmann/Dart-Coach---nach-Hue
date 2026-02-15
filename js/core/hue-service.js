@@ -1,11 +1,9 @@
 import { Store } from './store.js';
 import { EventBus } from './event-bus.js';
 
-// Konfiguration
 const DEFAULT_USER = "ZCOSuetFzmudvr7TAbDmPJUN1Ta8Lf7N2eJ7D7tL";
 const APP_NAME = "dart_coach";
 
-// Farb-Definitionen (Hue: 0-65535, Sat: 0-254, Bri: 0-254)
 const COLORS = {
     warmWhite: { ct: 400, bri: 120 },
     green: { hue: 25500, sat: 254, bri: 150 },
@@ -29,9 +27,6 @@ let _hueState = {
 	isEnabled: false
 };
 
-// =========================================================
-// SCREEN → MOOD MAPPING (vorher in ui-core.js showScreen())
-// =========================================================
 const SCREEN_MOOD_MAP = {
     'screen-dashboard':      'intro',
     'screen-game-selector':  'intro',
@@ -40,9 +35,6 @@ const SCREEN_MOOD_MAP = {
     'screen-result':         'match-won'
 };
 
-// =========================================================
-// OVERLAY → HUE TRIGGER MAPPING (vorher in game-engine.js onInput())
-// =========================================================
 const OVERLAY_HUE_MAP = {
     '180':             '180',
     'high':            'HIGH_SCORE',
@@ -54,7 +46,6 @@ const OVERLAY_HUE_MAP = {
     'cricket-open':    'HIT',
     'cricket-closed':  'HIT',
     'cricket-hit':     'HIT',
-    // 'check' wird pro gameId differenziert (siehe _handleGameEvent)
 };
 
 export const HueService = {
@@ -83,8 +74,6 @@ export const HueService = {
             });
         }
     },
-
-    // --- SETUP & VERBINDUNG ---
 
     discoverBridge: async function() {
 		const FALLBACK_IP = "192.168.178.40";
@@ -187,8 +176,6 @@ export const HueService = {
         return _hueState.isEnabled;
     },
 	
-    // --- LICHT STEUERUNG (Low Level) ---
-	
 	activateScene: function(sceneId) {
 		if (!_hueState.isEnabled || !_hueState.isConnected) return;
         
@@ -225,8 +212,6 @@ export const HueService = {
             // Silent fail
         }
     },
-
-    // --- HIGH LEVEL API ---
 
     setMood: function(mood) {
 		if (!_hueState.isEnabled || !_hueState.isConnected) return;
@@ -284,6 +269,10 @@ export const HueService = {
         console.log("Hue Trigger:", event);
 		this._currentMood = null;
 
+        // NEU: Einstellungen aus LocalStorage lesen (Fallback-Safe)
+        const settings = JSON.parse(localStorage.getItem('dc_app_settings') || '{}');
+        const hueSettings = settings.hue?.effectDuration || {};
+
         switch(event) {
             case 'HIT':
             case 'SINGLE':
@@ -296,11 +285,13 @@ export const HueService = {
                 break;
             case 'HIGH_SCORE':
                 this._put(null, { on: true, ...COLORS.party, alert: 'lselect' }); 
-                setTimeout(() => this.setMood('warm'), 4000);
+                // Neu: Konfigurierbare Duration (Default: 4000)
+                setTimeout(() => this.setMood('warm'), hueSettings.highScore || 4000);
                 break;
             case '180': 
                 this._put(null, { on: true, ...COLORS.party, effect: 'colorloop', bri: 254 });
-                setTimeout(() => this.setMood('warm'), 8000);
+                // Neu: Konfigurierbare Duration (Default: 8000)
+                setTimeout(() => this.setMood('warm'), hueSettings.oneEighty || 8000);
                 break;
         }
     },
@@ -308,18 +299,6 @@ export const HueService = {
     getConfig: () => _hueState
 };
 
-
-// =========================================================
-// EVENT-BUS SUBSCRIPTIONS
-// =========================================================
-// Alle Mapping-Logik lebt jetzt HIER statt in game-engine.js / ui-core.js.
-// Neue Services (Sound, etc.) subscriben einfach auf die gleichen Events.
-// =========================================================
-
-/**
- * SCREEN_CHANGED: Setzt die Grundstimmung passend zum Screen.
- * Emittiert von ui-core.js showScreen()
- */
 EventBus.on('SCREEN_CHANGED', ({ screen }) => {
     const mood = SCREEN_MOOD_MAP[screen];
     if (mood) {
@@ -327,30 +306,21 @@ EventBus.on('SCREEN_CHANGED', ({ screen }) => {
     }
 });
 
-/**
- * GAME_EVENT: Reagiert auf Spiel-Events (Overlay, Input, Highscore, Match-Win).
- * Emittiert von game-engine.js onInput() und startGame()
- */
 EventBus.on('GAME_EVENT', (data) => {
-    
-    // A) Spiel gestartet → Warmweiß
     if (data.type === 'game-started') {
         HueService.setMood('warm');
         return;
     }
 
-    // Ab hier nur 'input-processed' Events
     if (data.type !== 'input-processed') return;
 
     const { overlay, action, value, gameId, lastTurnScore } = data;
     let hueTriggered = false;
 
-    // B) Overlay-Events (Priorität 1)
     if (overlay) {
         hueTriggered = true;
         const overlayType = overlay.type;
 
-        // Sonderfall: 'check' hängt vom Spieltyp ab
         if (overlayType === 'check') {
             if (gameId === 'bobs27') {
                 HueService.trigger('HIT');
@@ -358,17 +328,14 @@ EventBus.on('GAME_EVENT', (data) => {
                 HueService.trigger('180');
             }
         } 
-        // Standard-Mapping aus der Tabelle
         else if (OVERLAY_HUE_MAP[overlayType]) {
             HueService.trigger(OVERLAY_HUE_MAP[overlayType]);
         } 
-        // Unbekannter Overlay-Typ → Default HIT
         else {
             HueService.trigger('HIT');
         }
     }
 
-    // C) Stille Treffer/Miss (kein Overlay) → Priorität 2
     if (!hueTriggered) {
         const isHitEvent = (value?.type === 'HIT') || (value === 'HIT');
         const isDirectMiss = (value === 'MISS');
@@ -377,8 +344,6 @@ EventBus.on('GAME_EVENT', (data) => {
             const isMiss = isDirectMiss || (value?.val?.isMiss);
 
             if (isMiss) {
-                // ATB: Bei stillen Misses (1./2. Dart) KEIN Rotlicht.
-                // Rotlicht kommt nur über das Overlay am Rundenende.
                 if (gameId !== 'around-the-board') {
                     HueService.trigger('MISS');
                 }
@@ -388,7 +353,6 @@ EventBus.on('GAME_EVENT', (data) => {
         }
     }
 
-    // D) Highscore-Check (X01/Training - nach Turn-Abschluss)
     if (lastTurnScore !== null && lastTurnScore !== undefined) {
         setTimeout(() => {
             if (lastTurnScore === 180) {
@@ -399,7 +363,6 @@ EventBus.on('GAME_EVENT', (data) => {
         }, 600);
     }
 
-    // E) Match-Win Stimmung (verzögert)
     if (action === 'WIN_MATCH') {
         setTimeout(() => HueService.setMood('match-won'), 2000);
     }

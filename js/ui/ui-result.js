@@ -3,6 +3,7 @@ import { GameEngine } from '../games/game-engine.js';
 import { UI } from './ui-core.js';
 import { HueService } from '../core/hue-service.js';
 import { StatsBoard } from './ui-stats-board.js';
+import { TrainingManager } from '../core/training-manager.js';
 
 let resultChartInstance = null;
 
@@ -71,6 +72,22 @@ export const ResultScreen = {
             `;
         }
         
+        else if (session.gameId === 'checkout-challenge' || session.gameId === 'halve-it' || session.gameId === 'scoring-drill') {
+            // Sortierung nach Score (höchster gewinnt)
+            const sortedPlayers = [...session.players].sort((a,b) => b.score - a.score);
+            winner = sortedPlayers[0];
+
+            headerHtml = `
+                <div class="result-header">
+                    <div class="winner-showcase">
+                        <div class="winner-crown">👑</div>
+                        <div class="winner-name">${winner.name}</div>
+                        <div class="winner-sub" style="color:var(--accent-color);">${winner.score} Punkte</div>
+                    </div>
+                </div>
+            `;
+        }
+        
         // --- C) TRAINING, CRICKET & SHANGHAI ---
         else {
             const sortedPlayers = [...session.players].sort((a,b) => b.currentResidual - a.currentResidual);
@@ -88,6 +105,7 @@ export const ResultScreen = {
         }
 
         // 2. HTML ZUSAMMENBAUEN
+        // WICHTIG: Wir geben den Buttons hier schon IDs, konfigurieren sie aber gleich erst
         let html = `
             <div class="result-actions-top">
                 <button id="btn-result-menu" class="btn-compact secondary">
@@ -120,29 +138,74 @@ export const ResultScreen = {
             tabContainer.appendChild(btn);
         });
 
-        // 4. BUTTON EVENTS (HIER IST DER FIX!)
-        document.getElementById('btn-result-menu').onclick = async () => {
-            const btn = document.getElementById('btn-result-menu');
-            
-            // Nur speichern, wenn wir keine Gäste sind (oder Logik anpassen, wenn Gäste auch speichern sollen)
-            const isGuest = UI.isGuest(); 
-            if(!isGuest) {
-                btn.innerText = "Speichert...";
-                btn.disabled = true;
-                
-                await this._saveToHistory(session);
-            }
-            
-            setTimeout(() => {
-                UI.showScreen('screen-dashboard');
-            }, 800);
-        };
+        // 4. BUTTON LOGIK KONFIGURIEREN (HIER WAR DER FEHLER)
+        // Wir prüfen SOFORT, nicht erst beim Klick
         
-        document.getElementById('btn-result-rematch').onclick = async () => {
-            // Bei Rematch speichern wir meist auch das alte Spiel
-            if(!UI.isGuest()) await this._saveToHistory(session); 
-            this.handleRematch(session);
-        };
+        const btnMenu = document.getElementById('btn-result-menu');
+        const btnRematch = document.getElementById('btn-result-rematch');
+        const isTrainingPlan = TrainingManager.isActive();
+
+        if (isTrainingPlan) {
+             // --- PLAN MODUS ---
+             // Wir ändern Text und Verhalten der existierenden Buttons
+
+             // LINKS: PLAN ABBRECHEN
+             btnMenu.innerHTML = "PLAN ABBRECHEN ✕";
+             btnMenu.onclick = async () => {
+                 if(!UI.isGuest()) await this._saveToHistory(session);
+                 TrainingManager.finishPlan(); 
+             };
+
+             // RECHTS: NÄCHSTE ÜBUNG (oder Plan fertig)
+             const status = TrainingManager.getStatus();
+             // Prüfen: War das der letzte Block?
+             if (status && status.blockIndex >= status.totalBlocks - 1) {
+                 btnRematch.innerHTML = "PLAN ABSCHLIESSEN ✅";
+                 btnRematch.onclick = async () => {
+                     if(!UI.isGuest()) await this._saveToHistory(session);
+                     TrainingManager.finishPlan();
+                 };
+             } else {
+                 btnRematch.innerHTML = "NÄCHSTE ÜBUNG ▶";
+                 btnRematch.onclick = async () => {
+                     if(!UI.isGuest()) await this._saveToHistory(session);
+                     TrainingManager.nextBlock();
+                 };
+             }
+             
+             // OPTIONAL: WIEDERHOLEN BUTTON
+             // Da deine UI nur 2 Buttons oben vorsieht (Actions Top), haben wir keinen Platz für einen dritten.
+             // Du hattest "Wiederholen" gewünscht. Wir könnten den "Abbrechen"-Button dafür nutzen
+             // oder einen dritten Button einfügen.
+             // VORSCHLAG: Wir fügen "Wiederholen" als kleinen Text-Link oder dritten Button hinzu,
+             // ODER wir lassen es so (Weiter / Abbruch).
+             // Wenn du "Wiederholen" statt "Abbrechen" willst:
+             /*
+             btnMenu.innerHTML = "↺ WIEDERHOLEN";
+             btnMenu.onclick = async () => {
+                 if(!UI.isGuest()) await this._saveToHistory(session);
+                 TrainingManager.restartCurrentBlock();
+             };
+             */
+
+        } else {
+             // --- NORMALER MODUS ---
+             
+             btnMenu.onclick = async () => {
+                const isGuest = UI.isGuest(); 
+                if(!isGuest) {
+                    btnMenu.innerText = "Speichert...";
+                    btnMenu.disabled = true;
+                    await this._saveToHistory(session);
+                }
+                setTimeout(() => { UI.showScreen('screen-dashboard'); }, 800);
+             };
+             
+             btnRematch.onclick = async () => {
+                if(!UI.isGuest()) await this._saveToHistory(session); 
+                this.handleRematch(session);
+             };
+        }
 
         // 5. INITIAL VIEW
         this.renderPlayerDashboard(winner.id, session);
@@ -211,8 +274,14 @@ export const ResultScreen = {
             this._renderTrainingDashboard(container, playerId, session);
         } else if (session.gameId === 'cricket') {
             this._renderCricketDashboard(container, playerId, session); 
-		} else if (session.gameId === 'around-the-board') { // --- NEU ---
+		} else if (session.gameId === 'checkout-challenge') {
+            this._renderCheckoutChallengeDashboard(container, playerId, session);
+		} else if (session.gameId === 'halve-it') {
+            this._renderHalveItDashboard(container, playerId, session);
+		} else if (session.gameId === 'around-the-board') {
             this._renderAtbDashboard(container, playerId, session);
+		} else if (session.gameId === 'scoring-drill') {
+			this._renderScoringDrillDashboard(container, playerId, session);
         } else {
             this._renderX01Dashboard(container, playerId, session);
         }
@@ -220,7 +289,186 @@ export const ResultScreen = {
 
     // --- DASHBOARDS ---
 
-    _renderAtbDashboard: function(container, playerId, session) {
+    _renderScoringDrillDashboard: function(container, playerId, session) {
+        const player = session.players.find(p => p.id === playerId);
+        const data = GameEngine.getResultData(session, player);
+
+        container.innerHTML = `
+            <div class="stats-hero-grid" style="margin-bottom: 20px;">
+                <div class="hero-card accent">
+                    <span class="hero-label">Total Score</span>
+                    <span class="hero-val">${data.summary.totalScore}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Average</span>
+                    <span class="hero-val">${data.summary.avg}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Darts</span>
+                    <span class="hero-val">${data.summary.dartsThrown} / ${data.summary.limit}</span>
+                </div>
+            </div>
+
+            <div class="grid-triple-result">
+                <div class="chart-wrapper-big">
+                    <canvas id="scoringDrillChart"></canvas>
+                </div>
+                <div class="heatmap-container" id="result-heatmap-box">
+                    ${StatsBoard.generateSVG(350)}
+                </div>
+                <div class="score-distribution">
+                    <h4 style="margin-bottom:25px; letter-spacing:1px; color:#888; text-transform:uppercase; font-size:0.9rem;">POWER SCORES</h4>
+                    <div class="dist-bar"><span>100+</span> <strong>${data.powerScores.ton}</strong></div>
+                    <div class="dist-bar"><span>140+</span> <strong>${data.powerScores.ton40}</strong></div>
+                    <div class="dist-bar gold"><span>180</span> <strong>${data.powerScores.max}</strong></div>
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            this.applyHeatmap(data.heatmap);
+            
+            const ctx = document.getElementById('scoringDrillChart');
+            if (ctx && data.chart) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.chart.labels,
+                        datasets: data.chart.datasets 
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                            x: { display: true, ticks: { color: '#888', font: {size: 10} } }
+                        }
+                    }
+                });
+            }
+        }, 0);
+    },
+	
+	_renderHalveItDashboard: function(container, playerId, session) {
+        const player = session.players.find(p => p.id === playerId);
+        const data = GameEngine.getResultData(session, player);
+
+        container.innerHTML = `
+            <div class="stats-hero-grid" style="margin-bottom: 20px;">
+                <div class="hero-card accent">
+                    <span class="hero-label">Endstand</span>
+                    <span class="hero-val">${data.summary.totalScore}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Halbiert</span>
+                    <span class="hero-val" style="color:var(--miss-color)">${data.summary.halvings}x</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Perfekte Runden</span>
+                    <span class="hero-val" style="color:#eab308">${data.summary.perfectRounds}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Trefferquote</span>
+                    <span class="hero-val">${data.summary.hitRate}</span>
+                </div>
+            </div>
+
+            <div class="grid-triple-result">
+                <div class="chart-wrapper-big">
+                    <canvas id="halveItChart"></canvas>
+                </div>
+                <div class="heatmap-container" id="result-heatmap-box">
+                    ${StatsBoard.generateSVG(350)}
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            this.applyHeatmap(data.heatmap);
+            
+            const ctx = document.getElementById('halveItChart');
+            if (ctx && data.chart) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.chart.labels,
+                        datasets: data.chart.datasets 
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                            x: { display: true, ticks: { color: '#888', font: {size: 10} } }
+                        }
+                    }
+                });
+            }
+        }, 0);
+    },
+	
+	_renderCheckoutChallengeDashboard: function(container, playerId, session) {
+        const player = session.players.find(p => p.id === playerId);
+        const data = GameEngine.getResultData(session, player);
+
+        container.innerHTML = `
+            <div class="stats-hero-grid" style="margin-bottom: 20px;">
+                <div class="hero-card accent">
+                    <span class="hero-label">Gesamtpunkte</span>
+                    <span class="hero-val">${data.summary.totalScore}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Quote</span>
+                    <span class="hero-val">${data.summary.checkoutRate}</span>
+                </div>
+                <div class="hero-card">
+                    <span class="hero-label">Checkouts</span>
+                    <span class="hero-val">${data.summary.checkoutsHit} / ${data.summary.checkoutsTotal}</span>
+                </div>
+            </div>
+
+            <div class="grid-triple-result">
+                <div class="chart-wrapper-big">
+                    <canvas id="checkoutResultChart"></canvas>
+                </div>
+                
+                <div class="heatmap-container" id="result-heatmap-box">
+                    ${StatsBoard.generateSVG(350)}
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            // A) Heatmap aktivieren
+            this.applyHeatmap(data.heatmap);
+
+            // B) Chart manuell rendern (für rote Farbe)
+            const ctx = document.getElementById('checkoutResultChart');
+            if (ctx && data.chart) {
+                // Wir nehmen die Datasets direkt aus der Strategy (dort haben wir Farbe & Daten definiert)
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.chart.labels,
+                        datasets: data.chart.datasets 
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                            x: { display: true, ticks: { color: '#888', font: {size: 10} } }
+                        }
+                    }
+                });
+            }
+        }, 0);
+    },
+	
+	_renderAtbDashboard: function(container, playerId, session) {
         const player = session.players.find(p => p.id === playerId);
         const data = GameEngine.getResultData(session, player);
 
