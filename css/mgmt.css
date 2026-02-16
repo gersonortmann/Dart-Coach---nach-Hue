@@ -768,3 +768,68 @@
     .mgmt-dh-name { font-size: 1.2rem; }
     .mgmt-dh-input { width: 140px; font-size: 1.1rem; }
 }
+
+/* Akkordeon Styles für Management */
+.mgmt-acc-item {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.mgmt-acc-header {
+    padding: 15px;
+    background: var(--bg-card);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background 0.2s;
+}
+
+.mgmt-acc-header:hover {
+    background: #333;
+}
+
+/* Wenn offen: Akzentfarbe am Rand, Border unten sichtbar */
+.mgmt-acc-item.open {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.mgmt-acc-item.open .mgmt-acc-header {
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-input);
+}
+
+.mgmt-acc-content {
+    display: none; /* Standardmäßig versteckt */
+    padding: 20px;
+    background: var(--bg-panel);
+    animation: slideDown 0.2s ease-out;
+}
+
+.mgmt-acc-item.open .mgmt-acc-content {
+    display: block; /* Anzeigen wenn Klasse 'open' */
+}
+
+.mgmt-acc-icon {
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.mgmt-acc-item.open .mgmt-acc-icon {
+    transform: rotate(180deg);
+    color: var(--text-main);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

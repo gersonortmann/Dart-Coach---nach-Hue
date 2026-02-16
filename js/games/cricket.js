@@ -28,7 +28,7 @@ export const Cricket = {
     handleInput: function(session, player, dart) {
         // Step 7a: Input-Parsing entfällt komplett!
         const targetVal = dart.base;                          // 20, 19, ..., 25 oder 0
-        const hits = dart.isMiss ? 0 : dart.multiplier;      // 0, 1, 2, oder 3
+        const hits = dart.isMiss ? 0 : dart.multiplier;       // 0, 1, 2, oder 3
 
         const validTargets = session.targets; 
         let pointsScored = 0;
@@ -54,6 +54,40 @@ export const Cricket = {
 
         // Dart speichern: points wird mit Cricket-spezifischem Wert überschrieben
         session.tempDarts.push({ ...dart, points: pointsScored });
+
+        // ============================================================
+        // NEU: LIVE MPR BERECHNUNG (Hier eingefügt!)
+        // ============================================================
+        let totalMarks = 0;
+        let totalDarts = 0;
+        const cricketTargets = [15, 16, 17, 18, 19, 20, 25];
+
+        // 1. Vergangene Runden
+        (player.turns || []).forEach(t => {
+            (t.darts || []).forEach(d => {
+                totalDarts++;
+                if (!d.isMiss && cricketTargets.includes(d.base)) {
+                    totalMarks += d.multiplier;
+                }
+            });
+        });
+
+        // 2. Aktuelle Darts (tempDarts sind oben gerade aktualisiert worden)
+        (session.tempDarts || []).forEach(d => {
+            totalDarts++;
+            if (!d.isMiss && cricketTargets.includes(d.base)) {
+                totalMarks += d.multiplier;
+            }
+        });
+
+        // 3. Wert am Spieler speichern
+        if (totalDarts > 0) {
+            player.liveMpr = ((totalMarks / totalDarts) * 3).toFixed(2);
+        } else {
+            player.liveMpr = "0.00";
+        }
+        // ============================================================
+
 
         // --- WIN CHECK ---
         if (this._checkWinCondition(session, player)) { 

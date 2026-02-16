@@ -24,6 +24,9 @@ const GAME_META = {
     'shanghai':         { label: 'Shanghai',         accent: '#f59e0b' },
     'bobs27':           { label: "Bob's 27",         accent: '#ef4444' },
     'around-the-board': { label: 'Around the Board', accent: '#06b6d4' },
+	'checkout-challenge': { label: 'Checkout Challenge', accent: '#e11d48' },
+    'halve-it':           { label: 'Halve It',           accent: '#f59e0b' },
+    'scoring-drill':      { label: 'Scoring Drill',      accent: '#0ea5e9' }
 };
 
 const DEFAULT_SETTINGS = {
@@ -53,6 +56,7 @@ const DEFAULT_SETTINGS = {
 let activeTab = 'settings';
 let selectedPlayerId = null;
 let activeFilter = 'all';
+let activeTimeFilter = 'today'; // <--- NEU: Zeitfilter Variable
 let appSettings = null;
 
 // ═══════════════════════════════════════════════════════════════
@@ -144,108 +148,82 @@ export const Management = {
         }
     },
 
-    // ═══════════════════════════════════════════════════════════
-    //  TAB 1: EINSTELLUNGEN
+// ═══════════════════════════════════════════════════════════
+    //  TAB 1: EINSTELLUNGEN (Umbau auf Akkordeon)
     // ═══════════════════════════════════════════════════════════
 
     _renderSettings(el) {
         const s = appSettings;
-        el.innerHTML = `
-            ${this._section('Allgemein', `
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Overlay-Dauer</label>
-                    <div class="mgmt-range-row">
-                        <input type="range" id="set-overlay" class="mgmt-range" min="400" max="3000" step="100" value="${s.overlayDuration}">
-                        <span id="set-overlay-val" class="mgmt-range-val">${s.overlayDuration} ms</span>
-                    </div>
-                    <div class="mgmt-hint">Wie lange Score-Overlays sichtbar bleiben (400–3000 ms)</div>
-                </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Sprachausgabe</label>
-                    <div class="mgmt-toggle-row">
-                        <button id="set-speech" class="mgmt-toggle ${s.speechEnabled ? 'on' : ''}">${s.speechEnabled ? 'AN' : 'AUS'}</button>
-                        <span class="mgmt-hint" style="margin:0;">Scores laut vorlesen (experimentell)</span>
-                    </div>
-                </div>
-            `)}
 
-            ${this._section('Spielvorgaben: X01', `
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Start-Punkte</label>
-                    <div class="mgmt-chips">
-                        ${[301,501,701].map(v => `<button class="mgmt-chip ${s.defaults.x01.startScore===v?'active':''}" data-g="x01-sc" data-v="${v}">${v}</button>`).join('')}
-                    </div>
+        // 1. Allgemein (bleibt immer sichtbar als Karte)
+        let html = this._section('Allgemein', `
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">Overlay-Dauer</label>
+                <div class="mgmt-range-row">
+                    <input type="range" id="set-overlay" class="mgmt-range" min="400" max="3000" step="100" value="${s.overlayDuration}">
+                    <span id="set-overlay-val" class="mgmt-range-val">${s.overlayDuration} ms</span>
                 </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Checkout</label>
-                    <div class="mgmt-chips">
-                        <button class="mgmt-chip ${s.defaults.x01.doubleOut?'active':''}" data-g="x01-do" data-v="true">Double Out</button>
-                        <button class="mgmt-chip ${!s.defaults.x01.doubleOut?'active':''}" data-g="x01-do" data-v="false">Single Out</button>
-                    </div>
+            </div>
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">Sprachausgabe</label>
+                <div class="mgmt-toggle-row">
+                    <button id="set-speech" class="mgmt-toggle ${s.speechEnabled ? 'on' : ''}">${s.speechEnabled ? 'AN' : 'AUS'}</button>
+                    <span class="mgmt-hint" style="margin:0;">Scores laut vorlesen</span>
                 </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Format</label>
-                    <div class="mgmt-chips">
-                        ${[1,3,5,7].map(v => `<button class="mgmt-chip ${s.defaults.x01.bestOf===v?'active':''}" data-g="x01-bo" data-v="${v}">Best of ${v}</button>`).join('')}
-                    </div>
-                </div>
-            `)}
+            </div>
+        `);
 
-            ${this._section('Spielvorgaben: Cricket', `
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Rundenlimit (Singleplayer)</label>
-                    <div class="mgmt-chips">
-                        ${[{v:0,l:'∞ Unbegrenzt'},{v:10,l:'10 Runden'},{v:20,l:'20 Runden'}].map(o =>
-                            `<button class="mgmt-chip ${s.defaults.cricket.spRounds===o.v?'active':''}" data-g="cr-rnd" data-v="${o.v}">${o.l}</button>`
-                        ).join('')}
-                    </div>
-                </div>
-            `)}
+        html += `<h4 style="margin: 20px 0 10px 0; color: #888; text-transform:uppercase; font-size:0.8rem; letter-spacing:1px;">Spielvorgaben (Defaults)</h4>`;
 
-            ${this._section('Spielvorgaben: Training', `
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Single Training – Reihenfolge</label>
-                    <div class="mgmt-chips">
-                        ${[{v:'ascending',l:'📈 Aufsteigend'},{v:'descending',l:'📉 Absteigend'},{v:'random',l:'🎲 Zufall'}].map(o =>
-                            `<button class="mgmt-chip ${s.defaults['single-training'].mode===o.v?'active':''}" data-g="st-m" data-v="${o.v}">${o.l}</button>`
-                        ).join('')}
-                    </div>
-                </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Shanghai – Reihenfolge</label>
-                    <div class="mgmt-chips">
-                        ${[{v:'ascending',l:'📈 Auf'},{v:'descending',l:'📉 Ab'},{v:'random',l:'🎲 Zufall'}].map(o =>
-                            `<button class="mgmt-chip ${s.defaults.shanghai.mode===o.v?'active':''}" data-g="sh-m" data-v="${o.v}">${o.l}</button>`
-                        ).join('')}
-                    </div>
-                </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Shanghai – Länge</label>
-                    <div class="mgmt-chips">
-                        <button class="mgmt-chip ${s.defaults.shanghai.length==='standard'?'active':''}" data-g="sh-l" data-v="standard">Standard (1–7)</button>
-                        <button class="mgmt-chip ${s.defaults.shanghai.length==='full'?'active':''}" data-g="sh-l" data-v="full">Komplett (1–20)</button>
-                    </div>
-                </div>
-                <div class="mgmt-field">
-                    <label class="mgmt-lbl">Around the Board – Variante</label>
-                    <div class="mgmt-chips">
-                        ${[{v:'full',l:'Gesamt'},{v:'single-inner',l:'Inner'},{v:'single-outer',l:'Outer'},{v:'double',l:'Doubles'},{v:'triple',l:'Triples'}].map(o =>
-                            `<button class="mgmt-chip ${s.defaults['around-the-board'].variant===o.v?'active':''}" data-g="atb-v" data-v="${o.v}">${o.l}</button>`
-                        ).join('')}
-                    </div>
-                </div>
-            `)}
-        `;
+        // 2. Definition der Spiele und ihrer Settings-Blöcke
+        // Hier können einfach neue Spiele hinzugefügt werden!
+        const gameList = [
+            { id: 'x01', label: 'X01 Match' },
+            { id: 'cricket', label: 'Cricket' },
+            { id: 'single-training', label: 'Single Training' },
+            { id: 'shanghai', label: 'Shanghai' },
+            { id: 'bobs27', label: "Bob's 27" }, // Placeholder, falls du Settings hast
+            { id: 'around-the-board', label: 'Around the Board' },
+			{ id: 'checkout-challenge', label: 'Checkout Challenge' },
+            { id: 'halve-it', label: 'Halve It' },
+            { id: 'scoring-drill', label: 'Scoring Drill' }
+        ];
 
-        // ── Slider ──
+        // Akkordeon Container
+        html += `<div class="mgmt-accordion">`;
+        
+        gameList.forEach(g => {
+            const content = this._getGameSettingsHTML(g.id, s);
+            // Wir nutzen GAME_META für Farben, falls vorhanden
+            const meta = GAME_META[g.id] || { accent: '#ccc' };
+            const borderStyle = `border-left: 4px solid ${meta.accent};`;
+
+            if (content) {
+                html += `
+                <div class="mgmt-acc-item" id="acc-${g.id}">
+                    <div class="mgmt-acc-header" style="${borderStyle}" onclick="window.DartApp.toggleAccordion('${g.id}')">
+                        <span>${g.label}</span>
+                        <span class="mgmt-acc-icon">▼</span>
+                    </div>
+                    <div class="mgmt-acc-content">
+                        ${content}
+                    </div>
+                </div>`;
+            }
+        });
+        html += `</div>`;
+
+        el.innerHTML = html;
+
+        // ── Event Listener binden (Slider, Toggle, Chips) ──
+        
+        // Slider & Toggle (Allgemein)
         const slider = el.querySelector('#set-overlay');
         const valEl = el.querySelector('#set-overlay-val');
         if (slider) {
             slider.oninput = () => { valEl.textContent = slider.value + ' ms'; };
             slider.onchange = () => { appSettings.overlayDuration = parseInt(slider.value); _saveSettings(); this._flash(slider.parentElement); };
         }
-
-        // ── Speech ──
         const btnSpeech = el.querySelector('#set-speech');
         if (btnSpeech) btnSpeech.onclick = () => {
             appSettings.speechEnabled = !appSettings.speechEnabled; _saveSettings();
@@ -253,21 +231,215 @@ export const Management = {
             btnSpeech.textContent = appSettings.speechEnabled ? 'AN' : 'AUS';
         };
 
-        // ── Chips ──
+        // Chips Logic (Global für alle Spiele)
         el.querySelectorAll('.mgmt-chip').forEach(chip => {
             chip.onclick = () => {
-                el.querySelectorAll(`.mgmt-chip[data-g="${chip.dataset.g}"]`).forEach(c => c.classList.remove('active'));
+                // Suche Chips in der gleichen Gruppe (innerhalb des gleichen Containers)
+                const group = chip.dataset.g;
+                const parent = chip.parentElement;
+                parent.querySelectorAll(`.mgmt-chip[data-g="${group}"]`).forEach(c => c.classList.remove('active'));
+                
                 chip.classList.add('active');
-                this._applyChip(chip.dataset.g, chip.dataset.v);
+                this._applyChip(group, chip.dataset.v);
                 _saveSettings();
                 this._flash(chip);
             };
         });
+
+        // ── Akkordeon Logic: Bridge zu window ──
+        // Da wir onclick="window.DartApp..." nutzen, müssen wir sicherstellen, dass die Funktion existiert.
+        // Besser: Wir binden es hier direkt ohne window pollution.
+        el.querySelectorAll('.mgmt-acc-header').forEach(hdr => {
+            hdr.onclick = (e) => {
+                const item = hdr.parentElement;
+                const isOpen = item.classList.contains('open');
+                
+                // 1. Alle schließen
+                el.querySelectorAll('.mgmt-acc-item').forEach(i => i.classList.remove('open'));
+
+                // 2. Geklicktes öffnen (wenn es nicht schon offen war)
+                if (!isOpen) {
+                    item.classList.add('open');
+                }
+            };
+        });
+    },
+
+    // Hilfsfunktion: Liefert das HTML für die spezifischen Spiel-Settings
+    // Hilfsfunktion: Liefert das HTML für die spezifischen Spiel-Settings
+    _getGameSettingsHTML(gameId, s) {
+        // s = appSettings (das gesamte Objekt mit .defaults)
+        const d = s.defaults || {};
+
+        // 1. Variablen für neue Spiele vorab definieren (verhindert ReferenceErrors)
+        // Wir nutzen kurze Variablennamen im HTML (co, hi, sd)
+        const co = d['checkout-challenge'] || { difficulty: 'standard', rounds: 10, doubleOut: true };
+        const hi = d['halve-it'] || { mode: 'standard', direction: 'descending', useSpecials: true };
+        const sd = d['scoring-drill'] || { dartLimit: 99 };
+
+        switch (gameId) {
+            // ─── BESTEHENDE SPIELE ───
+            case 'x01':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Start-Punkte</label>
+                        <div class="mgmt-chips">
+                            ${[301,501,701].map(v => `<button class="mgmt-chip ${d.x01.startScore===v?'active':''}" data-g="x01-sc" data-v="${v}">${v}</button>`).join('')}
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Checkout</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${d.x01.doubleOut?'active':''}" data-g="x01-do" data-v="true">Double Out</button>
+                            <button class="mgmt-chip ${!d.x01.doubleOut?'active':''}" data-g="x01-do" data-v="false">Single Out</button>
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Format</label>
+                        <div class="mgmt-chips">
+                            ${[1,3,5,7].map(v => `<button class="mgmt-chip ${d.x01.bestOf===v?'active':''}" data-g="x01-bo" data-v="${v}">Best of ${v}</button>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'cricket':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Rundenlimit (Singleplayer)</label>
+                        <div class="mgmt-chips">
+                            ${[{v:0,l:'∞ Unbegrenzt'},{v:10,l:'10 Runden'},{v:20,l:'20 Runden'}].map(o =>
+                                `<button class="mgmt-chip ${d.cricket.spRounds===o.v?'active':''}" data-g="cr-rnd" data-v="${o.v}">${o.l}</button>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'single-training':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Reihenfolge</label>
+                        <div class="mgmt-chips">
+                            ${[{v:'ascending',l:'📈 Aufsteigend'},{v:'descending',l:'📉 Absteigend'},{v:'random',l:'🎲 Zufall'}].map(o =>
+                                `<button class="mgmt-chip ${d['single-training'].mode===o.v?'active':''}" data-g="st-m" data-v="${o.v}">${o.l}</button>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'shanghai':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Reihenfolge</label>
+                        <div class="mgmt-chips">
+                            ${[{v:'ascending',l:'📈 Auf'},{v:'descending',l:'📉 Ab'},{v:'random',l:'🎲 Zufall'}].map(o =>
+                                `<button class="mgmt-chip ${d.shanghai.mode===o.v?'active':''}" data-g="sh-m" data-v="${o.v}">${o.l}</button>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Länge</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${d.shanghai.length==='standard'?'active':''}" data-g="sh-l" data-v="standard">Standard (1–7)</button>
+                            <button class="mgmt-chip ${d.shanghai.length==='full'?'active':''}" data-g="sh-l" data-v="full">Komplett (1–20)</button>
+                        </div>
+                    </div>
+                `;
+
+            case 'around-the-board':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Variante</label>
+                        <div class="mgmt-chips">
+                            ${[{v:'full',l:'Gesamt'},{v:'single-inner',l:'Inner'},{v:'single-outer',l:'Outer'},{v:'double',l:'Doubles'},{v:'triple',l:'Triples'}].map(o =>
+                                `<button class="mgmt-chip ${d['around-the-board'].variant===o.v?'active':''}" data-g="atb-v" data-v="${o.v}">${o.l}</button>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+
+            // ─── NEUE SPIELE ───
+            case 'checkout-challenge':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Schwierigkeit</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${co.difficulty==='easy'?'active':''}" data-g="cc-diff" data-v="easy">Easy (40-80)</button>
+                            <button class="mgmt-chip ${co.difficulty==='standard'?'active':''}" data-g="cc-diff" data-v="standard">Normal (60-120)</button>
+                            <button class="mgmt-chip ${co.difficulty==='hard'?'active':''}" data-g="cc-diff" data-v="hard">Hard (100-170)</button>
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Anzahl Checkouts</label>
+                        <div class="mgmt-chips">
+                            ${[10, 20, 30].map(v => `<button class="mgmt-chip ${co.rounds===v?'active':''}" data-g="cc-rnds" data-v="${v}">${v}</button>`).join('')}
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Modus</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${co.doubleOut?'active':''}" data-g="cc-do" data-v="true">Double Out</button>
+                            <button class="mgmt-chip ${!co.doubleOut?'active':''}" data-g="cc-do" data-v="false">Single Out</button>
+                        </div>
+                    </div>
+                `;
+
+            case 'halve-it':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Länge</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${hi.mode==='short'?'active':''}" data-g="hi-mod" data-v="short">Short (8)</button>
+                            <button class="mgmt-chip ${hi.mode==='standard'?'active':''}" data-g="hi-mod" data-v="standard">Standard (13)</button>
+                            <button class="mgmt-chip ${hi.mode==='long'?'active':''}" data-g="hi-mod" data-v="long">Long (22)</button>
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Reihenfolge</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${hi.direction==='descending'?'active':''}" data-g="hi-dir" data-v="descending">Absteigend</button>
+                            <button class="mgmt-chip ${hi.direction==='ascending'?'active':''}" data-g="hi-dir" data-v="ascending">Aufsteigend</button>
+                            <button class="mgmt-chip ${hi.direction==='random'?'active':''}" data-g="hi-dir" data-v="random">Zufall</button>
+                        </div>
+                    </div>
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Sonderfelder (Double/Triple)</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${hi.useSpecials?'active':''}" data-g="hi-spec" data-v="true">Ein</button>
+                            <button class="mgmt-chip ${!hi.useSpecials?'active':''}" data-g="hi-spec" data-v="false">Aus</button>
+                        </div>
+                    </div>
+                `;
+
+            case 'scoring-drill':
+                return `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">Darts Limit</label>
+                        <div class="mgmt-chips">
+                            <button class="mgmt-chip ${sd.dartLimit===33?'active':''}" data-g="sd-lim" data-v="33">33 (Sprint)</button>
+                            <button class="mgmt-chip ${sd.dartLimit===66?'active':''}" data-g="sd-lim" data-v="66">66 (Medium)</button>
+                            <button class="mgmt-chip ${sd.dartLimit===99?'active':''}" data-g="sd-lim" data-v="99">99 (Classic)</button>
+                        </div>
+                    </div>
+                `;
+
+            case 'bobs27':
+                return `<div class="mgmt-hint">Keine konfigurierbaren Standardwerte vorhanden.</div>`;
+
+            default:
+                return null;
+        }
     },
 
     _applyChip(g, v) {
         const d = appSettings.defaults;
+        
+        // Sicherstellen, dass die Unter-Objekte existieren
+        if (!d['checkout-challenge']) d['checkout-challenge'] = {};
+        if (!d['halve-it']) d['halve-it'] = {};
+        if (!d['scoring-drill']) d['scoring-drill'] = {};
+
         switch (g) {
+            // Bestehende Cases...
             case 'x01-sc':  d.x01.startScore = parseInt(v); break;
             case 'x01-do':  d.x01.doubleOut = v === 'true'; break;
             case 'x01-bo':  d.x01.bestOf = parseInt(v); break;
@@ -276,6 +448,20 @@ export const Management = {
             case 'sh-m':    d.shanghai.mode = v; break;
             case 'sh-l':    d.shanghai.length = v; break;
             case 'atb-v':   d['around-the-board'].variant = v; break;
+
+            // --- NEU ---
+            // Checkout Challenge
+            case 'cc-diff': d['checkout-challenge'].difficulty = v; break;
+            case 'cc-rnds': d['checkout-challenge'].rounds = parseInt(v); break;
+            case 'cc-do':   d['checkout-challenge'].doubleOut = v === 'true'; break;
+
+            // Halve It
+            case 'hi-mod':  d['halve-it'].mode = v; break;
+            case 'hi-dir':  d['halve-it'].direction = v; break;
+            case 'hi-spec': d['halve-it'].useSpecials = v === 'true'; break;
+
+            // Scoring Drill
+            case 'sd-lim':  d['scoring-drill'].dartLimit = parseInt(v); break;
         }
     },
 
@@ -324,7 +510,10 @@ export const Management = {
         // Select player
         el.querySelectorAll('.mgmt-pcard').forEach(card => {
             card.onclick = () => {
-                if (selectedPlayerId !== card.dataset.pid) activeFilter = 'all';
+                if (selectedPlayerId !== card.dataset.pid) {
+                    activeFilter = 'all';
+                    activeTimeFilter = 'today'; // Reset time filter on player switch
+                }
                 selectedPlayerId = card.dataset.pid;
                 this._renderDatabase(el);
             };
@@ -359,8 +548,29 @@ export const Management = {
 
         const history = p.history || [];
         const types = [...new Set(history.map(h => h.game || 'unknown'))];
+        
+        // ── FILTER LOGIK START ──
         let items = history.map((h, i) => ({ ...h, _idx: i })).reverse();
-        if (activeFilter !== 'all') items = items.filter(h => (h.game||'unknown') === activeFilter);
+
+        // 1. Zeit Filter
+        const now = Date.now();
+        const startOfToday = new Date().setHours(0,0,0,0);
+        const oneDay = 86400000;
+        
+        if (activeTimeFilter === 'today') {
+            // Check timestamp or fallback to date string parsing
+            items = items.filter(h => (h.timestamp || new Date(h.date).getTime()) >= startOfToday);
+        } else if (activeTimeFilter === 'week') {
+            items = items.filter(h => (h.timestamp || new Date(h.date).getTime()) >= (now - 7 * oneDay));
+        } else if (activeTimeFilter === 'month') {
+            items = items.filter(h => (h.timestamp || new Date(h.date).getTime()) >= (now - 30 * oneDay));
+        }
+        
+        // 2. Spiel Filter
+        if (activeFilter !== 'all') {
+            items = items.filter(h => (h.game||'unknown') === activeFilter);
+        }
+        // ── FILTER LOGIK ENDE ──
 
         area.innerHTML = `
             <div class="mgmt-dh">
@@ -375,17 +585,27 @@ export const Management = {
 
             <div class="mgmt-dh-toolbar">
                 <span class="mgmt-dh-count">${items.length} Einträge</span>
-                ${types.length > 1 ? `
-                    <select id="mgmt-hfilt" class="mgmt-filter-select">
-                        <option value="all" ${activeFilter==='all'?'selected':''}>Alle (${history.length})</option>
-                        ${types.map(t => `<option value="${t}" ${activeFilter===t?'selected':''}>${GAME_META[t]?.label||t} (${history.filter(h=>h.game===t).length})</option>`).join('')}
+                
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <select id="mgmt-tfilt" class="mgmt-filter-select">
+                        <option value="today" ${activeTimeFilter==='today'?'selected':''}>Heute</option>
+                        <option value="week" ${activeTimeFilter==='week'?'selected':''}>Diese Woche</option>
+                        <option value="month" ${activeTimeFilter==='month'?'selected':''}>Letzter Monat</option>
+                        <option value="all" ${activeTimeFilter==='all'?'selected':''}>Alle Zeiträume</option>
                     </select>
-                ` : ''}
+
+                    ${types.length > 1 ? `
+                        <select id="mgmt-hfilt" class="mgmt-filter-select">
+                            <option value="all" ${activeFilter==='all'?'selected':''}>Alle Spiele</option>
+                            ${types.map(t => `<option value="${t}" ${activeFilter===t?'selected':''}>${GAME_META[t]?.label||t}</option>`).join('')}
+                        </select>
+                    ` : ''}
+                </div>
             </div>
 
             <div id="mgmt-hist" class="mgmt-hist-scroll">
                 ${items.length === 0
-                    ? '<div class="mgmt-empty">Noch keine Spiele 🎯</div>'
+                    ? '<div class="mgmt-empty">Keine Spiele gefunden 🔍</div>'
                     : items.map(g => this._histCard(g)).join('')}
             </div>
         `;
@@ -427,9 +647,12 @@ export const Management = {
             }, { confirmLabel: 'LÖSCHEN', confirmClass: 'btn-yes' });
         };
 
-        // ── Filter ──
-        const filt = area.querySelector('#mgmt-hfilt');
-        if (filt) filt.onchange = (e) => { activeFilter = e.target.value; this._renderPlayerDetail(area); };
+        // ── Filters ──
+        const tFilt = area.querySelector('#mgmt-tfilt');
+        if (tFilt) tFilt.onchange = (e) => { activeTimeFilter = e.target.value; this._renderPlayerDetail(area); };
+
+        const gFilt = area.querySelector('#mgmt-hfilt');
+        if (gFilt) gFilt.onchange = (e) => { activeFilter = e.target.value; this._renderPlayerDetail(area); };
 
         // ── Delete game entries ──
         area.querySelectorAll('.mgmt-hdel').forEach(btn => {

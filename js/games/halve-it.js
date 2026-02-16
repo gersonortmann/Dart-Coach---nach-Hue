@@ -16,54 +16,92 @@ export const HalveIt = {
     generateTargets(options) {
         const opts = options || {};
         const mode = opts.mode || 'standard';
-        const direction = opts.direction || 'descending'; // Standard: Absteigend (20 -> 1)
-        
-        let targets = [];
+        const direction = opts.direction || 'descending'; 
+        const useSpecials = (opts.useSpecials !== false); // Default: Ja (true)
 
-        // 1. Basis-Liste generieren
-        if (mode === 'short') {
-            // Short (6 Runden)
-            targets = ['20', 'ANY_DOUBLE', '19', 'ANY_TRIPLE', 'BULL', 'ALL'];
-        } 
-        else if (mode === 'long') {
-            // Long (21 Runden - Full Board 20 bis 1 + Bull + All)
-            // Wir generieren 20..1
-            targets = Array.from({length: 20}, (_, i) => String(20 - i)); 
-            targets.push('BULL');
-            // Bei Long (Marathon) fügen wir im Code auch 'ALL' an, falls gewünscht, 
-            // oder lassen es wie im vorherigen Code. 
-            // Dein vorheriger Code hatte bei Long KEIN 'ALL' explizit, aber im Marathon-Code
-            // hatten wir "ALL" am Ende hinzugefügt. Wir bleiben konsistent:
-            targets.push('ALL'); 
-        } 
-        else {
-            // Standard (10 Runden)
-            targets = ['20', '19', '18', 'ANY_DOUBLE', '17', '16', 'ANY_TRIPLE', '15', 'BULL', 'ALL'];
+        // 1. Definition der benötigten Anzahl an Zahlen & des Musters
+        let countNeeded = 0;
+        let pattern = []; // Array aus Zahlen (Anzahl Normale) und Strings (Sonderfeld-ID)
+
+        if (useSpecials) {
+            // -- MIT SONDERFELDERN --
+            if (mode === 'short') {
+                // Short: 2 Zahlen, Double, 2 Zahlen, Triple -> (4 Zahlen insgesamt)
+                countNeeded = 4;
+                pattern = [2, 'ANY_DOUBLE', 2, 'ANY_TRIPLE'];
+            } 
+            else if (mode === 'long') {
+                // Long: 3, D, 3, T, 3, D, 3, T, 2, D, 1 -> (15 Zahlen insgesamt)
+                countNeeded = 15;
+                pattern = [
+                    3, 'ANY_DOUBLE', 
+                    3, 'ANY_TRIPLE', 
+                    3, 'ANY_DOUBLE', 
+                    3, 'ANY_TRIPLE', 
+                    2, 'ANY_DOUBLE', 
+                    1
+                ];
+            } 
+            else {
+                // Standard: 3, D, 2, T, 2, D, 1 -> (8 Zahlen insgesamt)
+                countNeeded = 8;
+                pattern = [3, 'ANY_DOUBLE', 2, 'ANY_TRIPLE', 2, 'ANY_DOUBLE', 1];
+            }
+        } else {
+            // -- OHNE SONDERFELDER --
+            if (mode === 'short') {
+                countNeeded = 6; // 20 bis 15
+            } else if (mode === 'long') {
+                countNeeded = 20; // 20 bis 1
+            } else {
+                // Standard
+                countNeeded = 11; // 20 bis 10
+            }
+            // Pattern ist hier einfach: Alles am Stück
+            pattern = [countNeeded];
         }
 
-        // 2. Sortierung anwenden
-        
-        // Wir nehmen "ALL" kurz raus, damit es nicht irgendwo in die Mitte gemischt wird
-        const hasAll = targets.includes('ALL');
-        let mainList = targets.filter(t => t !== 'ALL');
+        // 2. Zahlen-Pool generieren (immer von 20 abwärts startend)
+        // Erzeugt z.B. bei countNeeded=4 -> ['20', '19', '18', '17']
+        let numbers = Array.from({length: countNeeded}, (_, i) => String(20 - i));
 
+        // 3. Sortierung auf den Zahlen-Pool anwenden
         if (direction === 'ascending') {
-            // Aufsteigend: Einfach umdrehen
-            mainList.reverse();
+            numbers.reverse(); 
         } 
         else if (direction === 'random') {
-            // Zufällig mischen (Fisher-Yates Shuffle)
-            for (let i = mainList.length - 1; i > 0; i--) {
+            // Fisher-Yates Shuffle nur für die Zahlen
+            for (let i = numbers.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [mainList[i], mainList[j]] = [mainList[j], mainList[i]];
+                [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
             }
         }
-        // bei 'descending' passiert nichts, das ist die Standard-Reihenfolge der Arrays oben
+        // bei 'descending' bleibt es wie generiert (20, 19, ...)
 
-        // "ALL" wieder anhängen
-        if (hasAll) mainList.push('ALL');
+        // 4. Finale Liste basierend auf Pattern zusammenbauen
+        let finalTargets = [];
+        let numberIdx = 0;
 
-        return mainList;
+        for (let step of pattern) {
+            if (typeof step === 'number') {
+                // Nimm die nächsten X Zahlen aus dem sortierten Pool
+                for (let i = 0; i < step; i++) {
+                    if (numberIdx < numbers.length) {
+                        finalTargets.push(numbers[numberIdx]);
+                        numberIdx++;
+                    }
+                }
+            } else {
+                // Es ist ein Sonderfeld (String)
+                finalTargets.push(step);
+            }
+        }
+
+        // 5. Ende immer gleich
+        finalTargets.push('BULL');
+        finalTargets.push('ALL');
+
+        return finalTargets;
     },
 
     // ── SPIELER STARTWERTE ──
@@ -201,7 +239,7 @@ export const HalveIt = {
             summary: {
                 totalScore: player.score,
                 avg: "-", // Halve It hat keinen klassischen Average
-                checkoutRate: hitRate + "%", // Wir "missbrauchen" das Checkout Feld für die Hit-Rate (Quote)
+                checkoutRate: hitRate + "%", 
                 hitRate: hitRate + "%",
                 halvings: player.halvedCount,
                 perfectRounds: player.perfectRounds

@@ -52,32 +52,14 @@ export const Game = {
         const session = State.getActiveSession(); 
         if(!session) return;
 
-        // Header immer aktualisieren
-        const player = session.players[session.currentPlayerIndex];
-        const headerName = document.getElementById('game-player-name');
-        const headerScore = document.getElementById('game-player-score');
+        // 1. NEU: Header komplett neu rendern (Grid-System)
+        this._renderPlayerHeader(session);
+
+        // Match-Info (z.B. "Best of 5") aktualisieren, falls vorhanden
         const matchInfo = document.getElementById('game-match-info');
-        
-        if(headerName) {
-            // Name + "ist am Wurf"
-            headerName.innerHTML = `<span style="font-size:2rem; font-weight:800; text-transform:uppercase;">${player.name}</span> <span style="font-size:1rem; color:#888; font-weight:normal;">ist am Wurf</span>`;
-        }
-        
-        if(headerScore) {
-            // FIX: Unterscheidung zwischen Residual (X01) und Score (Halve It / Checkout)
-            let displayScore = player.currentResidual;
-            
-            if (session.gameId === 'halve-it' || session.gameId === 'checkout-challenge' || session.gameId === 'scoring-drill') {
-                displayScore = player.score;
-            }
-            
-            headerScore.innerText = (displayScore !== undefined && displayScore !== null) ? displayScore : 0;
-            headerScore.style.color = 'var(--accent-color)'; 
-        }
-        
         if(matchInfo) matchInfo.innerText = UI.getGameLabel(session.gameId);
 
-        // Render Weiche
+        // Render Weiche für Target-Box (bleibt unverändert)
         if (session.gameId === 'cricket') {
             this._renderCricket(session);
         }
@@ -105,6 +87,115 @@ export const Game = {
         else {
             this._renderX01(session);
         }
+        
+        // 2. WICHTIG: Das alte Multiplayer-Scoreboard unten ausblenden/leeren,
+        // da wir jetzt alle Infos oben haben.
+        const sbContainer = document.getElementById('multiplayer-scoreboard');
+        if (sbContainer) {
+            sbContainer.innerHTML = '';
+            sbContainer.style.display = 'none';
+        }
+    },
+
+    /**
+     * NEU: Baut den Header mit Boxen für jeden Spieler
+     */
+    _renderPlayerHeader: function(session) {
+        // Container finden (in deiner HTML ist das vermutlich .game-header-area)
+        const headerContainer = document.querySelector('.game-header-area');
+        if (!headerContainer) return;
+
+        const players = session.players;
+        const activeIdx = session.currentPlayerIndex;
+        const count = players.length;
+        const isMultiplayer = count > 1;
+
+        // Grid-Klassen bestimmen
+        let gridClass = 'p-count-multi'; // Default für 4+
+        if (count === 1) gridClass = 'p-count-1';
+        else if (count === 2) gridClass = 'p-count-2';
+        else if (count === 3) gridClass = 'p-count-3';
+
+        // HTML zusammenbauen
+        let html = `<div class="player-header-grid ${gridClass} ${isMultiplayer ? 'is-multi' : ''}">`;
+
+        players.forEach((p, idx) => {
+            const isActive = (idx === activeIdx);
+            
+            // Score ermitteln (Logik aus deinem alten Code übernommen)
+            let displayScore = p.currentResidual; // Standard (X01)
+            
+            // Spiele wo Score hochzählt statt Rest
+            if (session.gameId === 'halve-it' || 
+                session.gameId === 'checkout-challenge' || 
+                session.gameId === 'scoring-drill' || 
+                session.gameId === 'cricket') { // Bei Cricket zeigen wir hier oft Punkte oder Marks, Score ist aber safe
+                displayScore = p.score;
+            }
+
+            // Sicherstellen, dass 0 angezeigt wird
+            displayScore = (displayScore !== undefined && displayScore !== null) ? displayScore : 0;
+
+            // Zusatz-Info (z.B. Sets/Legs bei X01)
+            let metaInfo = "&nbsp;"; 
+
+            if (session.gameId === 'x01') {
+                if (session.settings.mode === 'sets') {
+                    metaInfo = `S:${p.setsWon} | L:${p.legsWon}`;
+                } else {
+                    metaInfo = `Legs: ${p.legsWon}`;
+                }
+            } 
+            else if (session.gameId === 'cricket') {
+                 metaInfo = `MPR: ${p.liveMpr || '0.00'}`;
+            } 
+            else if (session.gameId === 'single-training' || session.gameId === 'around-the-board') {
+                 // Beide nutzen Hit Rate
+                 metaInfo = `Quote: ${p.liveHitRate || '0.0%'}`;
+            } 
+            else if (session.gameId === 'bobs27') {
+                 metaInfo = `Hits: ${p.liveBobsHits || '0'}`;
+            } 
+            else if (session.gameId === 'scoring-drill') {
+                 metaInfo = `PPT: ${p.livePpt || '00.0'}`;
+            }
+            else if (session.gameId === 'checkout-challenge') {
+                 metaInfo = `Checks: ${p.checkoutsHit || '0'}`;
+            }
+            else if (session.gameId === 'halve-it') {
+                 metaInfo = `Halbiert: ${p.halvedCount || '0'}`;
+            }
+
+            html += `
+				<div class="player-header-card ${isActive ? 'active' : ''}">
+					<div class="ph-col-left">
+						<div class="ph-name">${p.name}</div>
+					</div>
+					
+					<div class="ph-col-center">
+						<div class="ph-legs">${metaInfo}</div>
+					</div>
+					
+					<div class="ph-col-right">
+						<div class="ph-score">${displayScore}</div>
+					</div>
+				</div>
+			`;
+        });
+
+        html += `</div>`;
+
+        // In den Header injecten
+        // ACHTUNG: Wir ersetzen den kompletten Inhalt von .game-header-area, 
+        // damit die alten IDs (game-player-name etc.) weg sind.
+        headerContainer.innerHTML = html;
+        
+        // Style-Reset, falls der Container vorher Flex/Padding hatte, 
+        // das jetzt stört (optional, je nach deiner base.css)
+        headerContainer.style.background = 'transparent';
+        headerContainer.style.border = 'none';
+        headerContainer.style.padding = '0';
+        headerContainer.style.width = '100%';
     },
 
     /**
@@ -441,76 +532,82 @@ export const Game = {
         const player = session.players[session.currentPlayerIndex];
         const targets = session.targets;
         
-        // 1. Index-Stabilisierung (Time Machine)
-        let roundIdx = player._roundIdx || 0;
+        const currentTurnScore = (session.tempDarts || []).reduce((a,b) => a + b.points, 0);
 
-        // Wenn wir Darts im Puffer haben (Overlay Phase), prüfen wir, ob wir zurückblicken müssen.
-        if (session.tempDarts && session.tempDarts.length > 0 && roundIdx > 0) {
-            // Wir berechnen hypothetisch: Was wäre das Ergebnis mit dem VORHERIGEN Ziel?
-            const prevTarget = targets[roundIdx - 1];
-            const thrown = session.tempDarts.reduce((a,b)=>a+b.points,0);
-            const diff = prevTarget - thrown;
+        // Standard: Wir nehmen den gespeicherten Startwert (z.B. 85 nach Checkout)
+        let startRes = (player._startOfTurnRes !== undefined) 
+            ? player._startOfTurnRes 
+            : targets[0];
             
-            // Indikatoren, dass die Runde eigentlich schon vorbei ist (Engine hat hochgezählt):
-            const isCheck = (diff === 0);
-            const isBust = (diff < 0 || diff === 1);
-            const isFail = (session.tempDarts.length === 3); 
+        let currentRoundIndex = player._roundIdx || 0;
 
-            // Wenn eines davon zutrifft, zeigen wir visuell noch die ALTE Runde an
-            if (isCheck || isBust || isFail) {
-                roundIdx--;
+        // 🔍 FIX: "Time Machine" für den Overlay-Moment
+        // Wenn Darts im Speicher liegen (tempDarts) UND die Strategie schon auf die nächste Runde geschaltet hat (roundIdx > 0),
+        // kann es sein, dass wir rechnerisch im "Niemandsland" sind (Neues Ziel minus Alte Darts = Negativ).
+        if (session.tempDarts && session.tempDarts.length > 0 && currentRoundIndex > 0) {
+            const prevTarget = targets[currentRoundIndex - 1];
+            const prevRes = prevTarget - currentTurnScore;
+            
+            // Wenn die Rechnung mit dem neuen Ziel keinen Sinn macht (< 0)
+            // ODER wenn wir auf dem alten Ziel exakt 0 (Check) oder <=1 (Bust) haben:
+            // Dann zeigen wir visuell noch die ALTE Runde an.
+            if ((startRes - currentTurnScore) < 0 || prevRes <= 1) {
+                startRes = prevTarget;
+                currentRoundIndex--; // Auch Anzeige "Runde X" korrigieren
             }
         }
-        
-        // Index begrenzen
-        if (roundIdx >= targets.length) roundIdx = targets.length - 1;
 
-        // 2. Werte ermitteln
-        // Da wir den Index jetzt stabilisiert haben, können wir einfach das Target aus dem Array nehmen.
-        // Das entspricht dem Startwert der Runde, die wir gerade anzeigen.
-        const startRes = targets[roundIdx];
+        // Live-Restwert Berechnung
+        let liveResidual = startRes - currentTurnScore;
 
-        // Punkte in der aktuellen Aufnahme
-        const thrownScore = (session.tempDarts || []).reduce((a,b) => a + b.points, 0);
-        
-        // Live-Restwert
-        const liveResidual = startRes - thrownScore;
-
-        // 3. UI Elemente
+        // UI Elemente
         const targetValEl = document.getElementById('game-target-val');
         const labelEl = document.getElementById('lbl-target-desc');
         const hintContainer = document.getElementById('checkout-suggestion');
         const headerScore = document.getElementById('game-player-score');
-        const turnScoreBox = document.getElementById('target-row-score');
         
+        // Turn Score Box ausblenden (wir nutzen Main Display)
+        const turnScoreBox = document.getElementById('target-row-score');
         if (turnScoreBox) turnScoreBox.style.visibility = 'hidden'; 
 
-        // 4. Anzeige Targetbox (Stabilisiert)
+        // 1. Anzeige Restwert (Große Zahl)
         if (targetValEl) {
-            targetValEl.innerText = liveResidual;
+             targetValEl.innerText = liveResidual;
         }
 
+        // 2. Header Score
         if (headerScore) headerScore.innerText = player.score;
         
+        // 3. Runden-Info
         if (labelEl) {
-            labelEl.innerText = `RUNDE ${roundIdx + 1} von ${targets.length}`;
+            // +1 weil Array 0-basiert
+            const displayRound = currentRoundIndex + 1;
+            labelEl.innerText = `RUNDE ${displayRound} von ${targets.length}`;
         }
 
-        // 5. Checkout Guide
+        // 4. Checkout Guide (Grüne Box)
         if (hintContainer) {
-            hintContainer.classList.remove('hidden');
             const dartsThrown = session.tempDarts ? session.tempDarts.length : 0;
             const dartsLeft = 3 - dartsThrown;
-			hintContainer.style.transition = "opacity 0.2s ease";
+			
+            hintContainer.classList.remove('hidden');
+            hintContainer.style.transition = "opacity 0.2s ease";
 
+            // FIX: Ausblenden bei 0 Darts oder während Animation
             if (dartsLeft <= 0 || session.animation) { 
                  hintContainer.style.opacity = '0';
             } else {
 				hintContainer.style.opacity = '1';
-                if (liveResidual < 0 || liveResidual === 1) {
+                
+                if (liveResidual <= 1 && liveResidual !== 0) {
+                     // 1 Rest oder < 0 ist Bust
                      hintContainer.innerText = "BUST";
                      hintContainer.style.color = "var(--miss-color)";
                 } 
+                else if (liveResidual === 0) {
+                     hintContainer.innerText = "CHECK!";
+                     hintContainer.style.color = "var(--accent-color)";
+                }
                 else {
                     const guide = GameEngine.getCheckoutGuide(liveResidual, dartsLeft);
                     if (guide && guide !== "") {

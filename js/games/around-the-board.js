@@ -51,6 +51,31 @@ export const AroundTheBoard = {
 
         session.tempDarts.push(dart);
 
+		// --- LIVE STATS: HIT RATE ---
+		let atbThrows = 0;
+		let atbHits = 0;
+
+		// 1. Historie
+		(player.turns || []).forEach(t => {
+			(t.darts || []).forEach(d => {
+				atbThrows++;
+				if (!d.isMiss) atbHits++;
+			});
+		});
+
+		// 2. Aktuell
+		(session.tempDarts || []).forEach(d => {
+			atbThrows++;
+			if (!d.isMiss) atbHits++;
+		});
+
+		// 3. Berechnen
+		if (atbThrows > 0) {
+			player.liveHitRate = ((atbHits / atbThrows) * 100).toFixed(0) + '%';
+		} else {
+			player.liveHitRate = '0%';
+		}
+
         // 1. WIN CHECK
         if (player.currentResidual >= session.targets.length) {
             this._logTurn(session, player);

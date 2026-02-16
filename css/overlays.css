@@ -175,3 +175,34 @@
     50% { transform: scale(0.9) rotate(-10deg); opacity: 1; }
     100% { transform: scale(1) rotate(-10deg); opacity: 1; }
 }
+
+/* Styling für die Plan-Optionen im Modal */
+.plan-opt-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.plan-opt-chip {
+    background: #333;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.plan-opt-chip:hover {
+    background: #444;
+    color: #fff;
+}
+
+.plan-opt-chip.active {
+    background: var(--accent-color); /* Oder ein helles Blau/Grün */
+    border-color: var(--accent-color);
+    color: #000; /* Dunkler Text auf hellem Grund für Kontrast */
+    font-weight: bold;
+}

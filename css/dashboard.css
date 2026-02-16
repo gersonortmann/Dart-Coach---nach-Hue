@@ -6,8 +6,8 @@
 /* ─── DASHBOARD CONTAINER ───────────────────────────────────── */
 
 #dashboard-content {
-    width: 100%;
-    max-width: 900px;
+    width: 80%;
+    /* max-width: 900px; */
     margin: 0 auto;
     padding: 0 8px 40px 8px;
     display: flex;
@@ -20,6 +20,7 @@
 .dash-header {
     text-align: center;
     padding: 20px 0 0 0;
+	max-width: 1600px;
 }
 
 .dash-header-top {
@@ -130,6 +131,7 @@
 .dash-match-grid {
     display: grid;
     grid-template-columns: 1fr;
+	max-width: 1600px;
     gap: 12px;
 }
 
@@ -250,6 +252,7 @@
 .dash-training-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
+	max-width: 1600px;
     gap: 10px;
 }
 

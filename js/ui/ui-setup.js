@@ -21,7 +21,7 @@ let shanghaiSettings = { mode: 'ascending', length: 'standard' };
 let atbSettings = { direction: 'ascending', variant: 'full' };
 let cricketSettings = { mode: 'standard', spRounds: 20 };
 let checkoutSettings = { difficulty: 'standard', rounds: 10, doubleOut: true };
-let halveItSettings = { mode: 'standard', direction: 'descending' };
+let halveItSettings = { mode: 'standard', direction: 'descending', useSpecials: true };
 let scoringSettings = { dartLimit: 99 };
 
 // --- PRIVATE HELPER: SPEICHERN & LADEN ---
@@ -286,9 +286,9 @@ function _renderHalveItOptions(container) {
     const rowMode = document.createElement('div'); rowMode.className = 'opt-row-big';
 
     const modes = [
-        { id: 'standard', label: 'Standard (10)' },
-        { id: 'short',    label: 'Short (6)' },
-        { id: 'long',     label: 'Long (21) 🥵' }
+        { id: 'short',    label: 'Short (8)' },
+        { id: 'standard', label: 'Standard (13)' },
+        { id: 'long',     label: 'Long (22) 🥵' }
     ];
 
     modes.forEach(m => {
@@ -305,7 +305,7 @@ function _renderHalveItOptions(container) {
     grpMode.appendChild(rowMode);
     container.appendChild(grpMode);
 
-    // 2. Reihenfolge (NEU)
+    // 2. Reihenfolge
     const grpDir = document.createElement('div'); 
     grpDir.className = 'opt-group-big';
     grpDir.innerHTML = '<span class="opt-label-big">Reihenfolge</span>';
@@ -330,6 +330,36 @@ function _renderHalveItOptions(container) {
     });
     grpDir.appendChild(rowDir);
     container.appendChild(grpDir);
+    
+    // 3. NEU: Sonderfelder (Specials)
+    const grpSpec = document.createElement('div');
+    grpSpec.className = 'opt-group-big';
+    grpSpec.innerHTML = '<span class="opt-label-big">Sonderfelder (Double/Triple)</span>';
+    const rowSpec = document.createElement('div'); 
+    rowSpec.className = 'opt-switch-row-big'; // Switch Style
+
+    const btnYes = document.createElement('button');
+    btnYes.className = 'opt-btn-big ' + (halveItSettings.useSpecials !== false ? 'active' : ''); // Default true
+    btnYes.innerText = "Ein";
+    btnYes.onclick = () => {
+        halveItSettings.useSpecials = true;
+        _saveSettings();
+        _renderSetupOptions();
+    };
+
+    const btnNo = document.createElement('button');
+    btnNo.className = 'opt-btn-big ' + (halveItSettings.useSpecials === false ? 'active' : '');
+    btnNo.innerText = "Aus";
+    btnNo.onclick = () => {
+        halveItSettings.useSpecials = false;
+        _saveSettings();
+        _renderSetupOptions();
+    };
+
+    rowSpec.appendChild(btnYes);
+    rowSpec.appendChild(btnNo);
+    grpSpec.appendChild(rowSpec);
+    container.appendChild(grpSpec);
 }
 
 function _renderCheckoutChallengeOptions(container) {
@@ -821,8 +851,16 @@ export const Setup = {
         GameEngine.startGame(selectedGameType, setupLineup, gameSettings);
     },
 	
-	showPlanPreview: function(plan, preSelectedPlayerId) {
-		
+	// --- NEU: Temporärer Speicher für den modifizierten Plan ---
+    tempPlan: null,
+
+    showPlanPreview: function(originalPlan, preSelectedPlayerId) {
+        // 1. Tiefe Kopie des Plans erstellen, damit wir Settings ändern können,
+        // ohne das Original (TRAINING_PLANS) dauerhaft zu verändern.
+        this.tempPlan = JSON.parse(JSON.stringify(originalPlan));
+        
+        const plan = this.tempPlan; // Ab jetzt arbeiten wir mit der Kopie
+
         let playerName = "Gast";
         if (preSelectedPlayerId) {
             const allPlayers = State.getAvailablePlayers();
@@ -833,18 +871,60 @@ export const Setup = {
         // Titel zusammenbauen
         const title = `PLAN: ${plan.label.toUpperCase()}`;
         
-        let body = `<div style="text-align:left; color:#ccc; font-size:0.95rem;">`;
-        
-        // --- NEU: Begrüßungs-Zeile ---
-        body += `
-            <div style="margin-bottom: 20px; padding-bottom:15px; border-bottom:1px solid #333;">
-                <span style="font-size:1.1rem; color:var(--text-main);">Hi <strong>${playerName}</strong>, bereit für dein Training?</span>
+        // Begrüßung
+        let body = `
+            <div style="text-align:left; color:#ccc; font-size:0.95rem;">
+                <div style="margin-bottom: 20px; padding-bottom:15px; border-bottom:1px solid #333;">
+                    <span style="font-size:1.1rem; color:var(--text-main);">Hi <strong>${playerName}</strong>, bereit für dein Training?</span>
+                </div>
+                <p style="margin-bottom:15px; font-style:italic; color:#888;">${plan.description}</p>
+                <div id="plan-blocks-container" style="background:#222; padding:10px; border-radius:8px; max-height: 350px; overflow-y: auto;">
+                    ${this._renderPlanBlocks(plan)}
+                </div>
+                <p style="margin-top:10px; font-size:0.8rem; color:#666;">Dauer: ca. ${plan.duration}</p>
             </div>
         `;
-        
-        body += `<p style="margin-bottom:15px; font-style:italic; color:#888;">${plan.description}</p>`;
-        body += `<div style="background:#222; padding:10px; border-radius:8px; max-height: 250px; overflow-y: auto;">`;
-		
+
+        if (typeof UI.showConfirm === 'function') {
+            UI.showConfirm(
+                title, 
+                body, 
+                () => {
+                    // START LOGIK (Nutzt jetzt this.tempPlan)
+                    let playersToUse = [];
+
+                    if (preSelectedPlayerId) {
+                        playersToUse = [preSelectedPlayerId];
+                    } else if (setupLineup && setupLineup.length > 0) {
+                        playersToUse = [...setupLineup];
+                    } else {
+                        const all = State.getAvailablePlayers();
+                        if(all.length > 0) playersToUse.push(all[0].id);
+                    }
+
+                    if (playersToUse.length === 0) {
+                        alert("Kein Spieler gefunden.");
+                        return;
+                    }
+
+                    // WICHTIG: Wir starten den modifizierten Plan!
+                    TrainingManager.startPlan(this.tempPlan, playersToUse);
+                },
+                {
+                    confirmLabel: "STARTEN ▶",
+                    confirmClass: "btn-yes", 
+                    cancelLabel: "ZURÜCK",
+                    cancelClass: "btn-no" 
+                }
+            );
+        } else {
+            console.warn("UI.showConfirm nicht verfügbar");
+        }
+    },
+
+    // --- HELPER: Rendert die Liste der Blöcke inkl. Optionen ---
+    _renderPlanBlocks: function(plan) {
+        let html = '';
         plan.blocks.forEach((block, index) => {
             let gameName = block.gameId;
             const map = {
@@ -860,54 +940,98 @@ export const Setup = {
             };
             if(map[block.gameId]) gameName = map[block.gameId];
 
-            body += `
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:4px;">
-                    <span>${index + 1}. ${gameName}</span>
-                    <span style="color:#888; font-size:0.8rem;">Block ${index + 1}</span>
+            html += `
+                <div style="margin-bottom:12px; border-bottom:1px solid #333; padding-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; color:#eee;">${index + 1}. ${gameName}</span>
+                    </div>
+                    ${this._renderBlockOptions(block, index)}
                 </div>
             `;
         });
-        
-        body += `</div><p style="margin-top:10px; font-size:0.8rem; color:#666;">Dauer: ca. ${plan.duration}</p></div>`;
+        return html;
+    },
 
-        if (typeof UI.showConfirm === 'function') {
-            UI.showConfirm(
-                title, 
-                body, 
-                () => {
-                    // START LOGIK
-                    let playersToUse = [];
+    // --- HELPER: Rendert die Chips für spezifische Spiele ---
+    _renderBlockOptions: function(block, index) {
+        const s = block.settings || {};
+        let optsHtml = '';
 
-                    // A) Hat das Dashboard uns einen Spieler geschickt? (Prio 1)
-                    if (preSelectedPlayerId) {
-                        playersToUse = [preSelectedPlayerId];
-                    } 
-                    // B) Fallback: Setup Lineup
-                    else if (setupLineup && setupLineup.length > 0) {
-                        playersToUse = [...setupLineup];
-                    }
-                    // C) Notfall-Fallback: Erster verfügbarer Spieler
-                    else {
-                        const all = State.getAvailablePlayers();
-                        if(all.length > 0) playersToUse.push(all[0].id);
-                    }
+        // Helper für Chip-Generierung
+        // type: 'val' (Wert direkt setzen) oder 'bool' (true/false)
+        const renderChips = (key, options, type = 'val') => {
+            let btns = '';
+            options.forEach(opt => {
+                // Prüfen, ob dieser Wert gerade aktiv ist
+                let isActive = false;
+                if (type === 'val') isActive = (s[key] === opt.val);
+                if (type === 'bool') isActive = (s[key] === opt.val);
 
-                    if (playersToUse.length === 0) {
-                        alert("Kein Spieler gefunden.");
-                        return;
-                    }
+                // Onclick Handler string bauen
+                // Wir rufen Setup.setPlanOption(blockIndex, key, value, type) auf
+                const valStr = (typeof opt.val === 'string') ? `'${opt.val}'` : opt.val;
+                
+                btns += `<button class="plan-opt-chip ${isActive ? 'active' : ''}" 
+                    onclick="Setup.setPlanOption(${index}, '${key}', ${valStr}, '${type}')">
+                    ${opt.label}
+                </button>`;
+            });
+            return `<div class="plan-opt-row">${btns}</div>`;
+        };
 
-                    TrainingManager.startPlan(plan, playersToUse);
-                },
-                {
-                    confirmLabel: "STARTEN ▶",
-                    confirmClass: "btn-yes", 
-                    cancelLabel: "ZURÜCK",
-                    cancelClass: "btn-no" 
-                }
-            );
-        } else {
-            console.warn("UI.showConfirm nicht verfügbar");
+        // WEICHE FÜR SPIELE
+        if (block.gameId === 'scoring-drill') {
+            optsHtml = renderChips('dartLimit', [
+                { val: 33, label: 'Sprint (33)' },
+                { val: 66, label: 'Medium (66)' },
+                { val: 99, label: 'Classic (99)' }
+            ]);
+        }
+        else if (block.gameId === 'around-the-board') {
+            optsHtml = renderChips('variant', [
+                { val: 'full', label: 'Gesamt' },
+                { val: 'single-inner', label: 'Inner Single' },
+                { val: 'single-outer', label: 'Outer Single' }
+            ]);
+        }
+        else if (block.gameId === 'checkout-challenge') {
+            optsHtml = renderChips('difficulty', [
+                { val: 'easy', label: 'Easy' },
+                { val: 'standard', label: 'Normal' },
+                { val: 'hard', label: 'Hard' }
+            ]);
+        }
+        else if (block.gameId === 'x01') {
+            optsHtml = renderChips('doubleOut', [
+                { val: true, label: 'Double Out' },
+                { val: false, label: 'Single Out' }
+            ], 'bool');
+        }
+        else if (block.gameId === 'halve-it') {
+            optsHtml = renderChips('mode', [
+                { val: 'standard', label: 'Standard' },
+                { val: 'long', label: 'Long' }
+            ]);
+        }
+        // Bob und Cricket haben keine Auswahl -> optsHtml bleibt leer
+
+        return optsHtml;
+    },
+
+    // --- ACTION: Wird aufgerufen, wenn man auf einen Chip klickt ---
+    setPlanOption: function(blockIndex, key, value, type) {
+        if (!this.tempPlan) return;
+
+        // Wert im temporären Plan aktualisieren
+        if (!this.tempPlan.blocks[blockIndex].settings) {
+            this.tempPlan.blocks[blockIndex].settings = {};
+        }
+        this.tempPlan.blocks[blockIndex].settings[key] = value;
+
+        // UI Aktualisieren (Re-Render des Containers)
+        const container = document.getElementById('plan-blocks-container');
+        if (container) {
+            container.innerHTML = this._renderPlanBlocks(this.tempPlan);
         }
     },
 
@@ -930,3 +1054,5 @@ export const Setup = {
     loadNextTrainingBlock: function() { console.warn("Training disabled"); },
     isTrainingActive: () => false
 };
+
+window.Setup = Setup;

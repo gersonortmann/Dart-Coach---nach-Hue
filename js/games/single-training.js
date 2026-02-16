@@ -40,6 +40,31 @@ export const SingleTraining = {
         player.currentResidual += points;
         session.tempDarts.push({ ...dart, points: points });
         
+		let totalThrows = 0;
+		let totalHits = 0;
+
+		// 1. Historie zählen
+		(player.turns || []).forEach(t => {
+			(t.darts || []).forEach(d => {
+				totalThrows++;
+				if (!d.isMiss) totalHits++; // Im Training ist alles was kein Miss ist ein Treffer
+			});
+		});
+
+		// 2. Aktuelle Darts zählen
+		(session.tempDarts || []).forEach(d => {
+			totalThrows++;
+			if (!d.isMiss) totalHits++;
+		});
+
+		// 3. Quote berechnen
+		if (totalThrows > 0) {
+			const rate = (totalHits / totalThrows) * 100;
+			player.liveHitRate = rate.toFixed(1) + '%';
+		} else {
+			player.liveHitRate = '0.0%';
+		}
+		
         // 3 Darts Check
         if (session.tempDarts.length >= 3) {
              const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);

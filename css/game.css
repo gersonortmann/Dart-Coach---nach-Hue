@@ -4,14 +4,14 @@
 
 #screen-game {
     display: flex; flex-direction: column; align-items: center;
-    width: 100%; height: 100%; 
+    width: 90%; height: 100%; 
     padding-bottom: var(--gap-lg); box-sizing: border-box;
 }
 
 /* --- HEADER --- */
 .game-header-area { 
-    width: 100%; text-align: center; 
-    margin: var(--gap-sm) 0 var(--gap-md) 0; flex-shrink: 0; 
+    width: 80%; text-align: center; 
+    margin: var(--gap-sm) 0 var(--gap-md) 0; flex-shrink: 0;
 }
 .active-player-big { 
     font-size: 2rem; font-weight: 800; color: var(--text-main); 
@@ -33,16 +33,18 @@
 
 /* --- TARGET BOX --- */
 .target-box {
+	flex: 1;
     background-color: var(--bg-panel); 
     padding: var(--gap-lg); border-radius: var(--radius-lg);
     text-align: center; border: 1px solid var(--border-default); 
-    width: 100%; max-width: 500px; 
+    width: 100%; /* max-width: 500px; */ 
     min-height: 400px; margin-bottom: var(--gap-lg);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     box-shadow: var(--shadow-lg); 
+	gap: 20px;
 }
 .target-value { 
-    font-size: 8rem; color: var(--highlight-color); font-weight: bold; 
+    font-size: 12rem; color: var(--highlight-color); font-weight: bold; 
     line-height: 1; font-variant-numeric: tabular-nums;
 }
 .target-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 5px; }
@@ -72,7 +74,7 @@
 }
 
 /* --- KEYPADS --- */
-.keypad-grid { display: grid; width: 100%; max-width: 500px; gap: var(--gap-sm); }
+.keypad-grid { display: grid; width: 100%; /* max-width: 500px;*/ gap: var(--gap-sm); }
 
 /* Grundlegende Button Styles */
 .key-btn { 
@@ -107,7 +109,7 @@
 #screen-game .bull-btn { background: var(--bull-color); color: #000; }
 
 /* --- PRO KEYPAD --- */
-.keypad-pro-grid { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 8px; }
+.keypad-pro-grid { width: 100%; /* max-width: 500px;*/ display: flex; flex-direction: column; gap: 8px; }
 .mod-btn { 
     background-color: var(--border-default); color: #000; 
     height: 55px; font-size: 1.2rem; font-weight: bold;
@@ -128,7 +130,7 @@
 .mode-double .num-btn { background: var(--mod-double); }
 .mode-triple .num-btn { background: var(--mod-triple); }
 
-#btn-pro-back { background: var(--bg-card); color: white; }
+#btn-pro-back { background: var(--bg-card); color: black; }
 
 /* --- DESKTOP SPLIT SCREEN (>= 1024px) --- */
 @media (min-width: 1024px) {
@@ -138,13 +140,13 @@
         grid-template-rows: auto auto; 
         gap: 40px; 
         align-items: stretch; justify-items: center; align-content: center;
-        max-width: 1400px; /* Synchronisiert mit base.css */
+        /* max-width: 1400px; /* Synchronisiert mit base.css */
         margin: 0 auto; height: 100%; 
     }
     .game-header-area { 
         grid-column: 1 / -1; grid-row: 1;
         background: #252525; padding: 15px; border-radius: 15px; border: 1px solid var(--border-default); 
-        width: 100%; max-width: 800px; display: flex; justify-content: space-around; align-items: center;
+        width: 100%; /* max-width: 800px;*/ display: flex; justify-content: space-around; align-items: center;
     }
     .target-box { 
         grid-column: 1; grid-row: 2; height: auto; min-height: 520px; 
@@ -263,7 +265,8 @@
     background: var(--bg-panel);
     border: 1px solid var(--border-default); 
     border-radius: 12px;
-    overflow: hidden; 
+    overflow: hidden;
+	margin: 0 auto;	
     margin-bottom: var(--gap-lg);
     box-shadow: var(--shadow-md);
     /* Zentrieren im Container */
@@ -358,3 +361,141 @@
 }
 
 .active .mark-svg { stroke: var(--accent-color); }
+
+/* =========================================
+   NEW PLAYER HEADER GRID
+   ========================================= */
+
+/* Der Container für alle Spieler-Boxen */
+.player-header-grid {
+    display: grid;
+    width: 100%;
+    /* Standardmäßig volle Breite, wird bei 1 Spieler überschrieben */
+    max-width: 100%; 
+    gap: 40px; /* Deine Anforderung */
+    margin: 0 auto;
+}
+
+/* 1 Spieler Layout: Zentriert & schmaler */
+.player-header-grid.p-count-1 {
+    grid-template-columns: 1fr;
+    max-width: 60%;
+}
+
+/* 2 Spieler Layout: 50/50 */
+.player-header-grid.p-count-2 {
+    grid-template-columns: 1fr 1fr;
+	gap: 40px;
+}
+
+/* 3 Spieler Layout: Drittel */
+.player-header-grid.p-count-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+	gap: 40px;
+}
+
+/* 4+ Spieler: Auto-Fit (mindestens 100px breit pro Karte) */
+.player-header-grid.p-count-multi {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+}
+
+/* Die einzelne Spieler-Karte */
+.player-header-card {
+    background: var(--bg-panel);
+    border: 2px solid var(--accent-glow);
+    border-radius: 12px;
+	padding: 10px 30px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Linke Spalte (Name) */
+.ph-col-left {
+    text-align: center;
+    flex: 1;                    /* Nimmt verfügbaren Platz ein */
+    overflow: hidden;           /* Falls der Name zu lang ist */
+}
+
+.ph-col-center {
+    text-align: center;
+    flex: 1;                    /* Nimmt verfügbaren Platz ein */
+}
+
+/* Rechte Spalte (Zahlen) */
+.ph-col-right {
+    text-align: center;          /* Text rechtsbündig */
+    flex: 1;    /* Score über Legs stapeln */
+    flex-shrink: 0;             /* Verhindert, dass Score gequetscht wird */
+}
+
+/* Name des Spielers */
+.ph-name {
+    font-size: 2.2rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Score des Spielers */
+.ph-score {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+/* Sets/Legs Info (klein drunter, optional für X01) */
+.ph-legs {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* --- ACTIVE STATE (Der Spieler, der dran ist) --- */
+
+/* Basis Active Style (Rahmen leuchtet immer) */
+.player-header-card.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2);
+}
+
+/* NUR IM MULTIPLAYER: Hintergrund einfärben */
+/* Wir nutzen eine Klasse .is-multi auf dem Grid, um das zu steuern */
+.player-header-grid.is-multi .player-header-card.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-color);
+	box-shadow: 0 0 15px rgba(0, 210, 106, 0.2);
+}
+
+/* Textfarben im aktiven Multiplayer-Status anpassen (Dunkel auf Grün) */
+.player-header-grid.is-multi .player-header-card.active .ph-name {
+    color: var(--text-main);
+}
+.player-header-grid.is-multi .player-header-card.active .ph-score {
+    color: var(--text-main);
+}
+.player-header-grid.is-multi .player-header-card.active .ph-legs {
+    color: var(--text-main);
+    font-weight: bold;
+}
+
+/* Mobile Anpassung: Bei kleinen Screens Gap verringern */
+@media (max-width: 600px) {
+    .player-header-grid { gap: 8px; }
+    .player-header-card { padding: 8px 2px; }
+    .ph-score { font-size: 1.5rem; }
+    .ph-name { font-size: 0.75rem; }
+    
+    /* Bei 1 Spieler auf Mobile fast vollbreit lassen */
+    .player-header-grid.p-count-1 { max-width: 90%; }
+}

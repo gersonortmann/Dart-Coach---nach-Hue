@@ -44,7 +44,21 @@ export const ScoringDrill = {
         player.dartsThrown++;
         
         session.tempDarts.push(dart);
+		
+		// --- LIVE STATS: PPT (Points per Turn) ---
+		const totalScoreDrill = player.score; 
+    
+		// Wir sind aktuell in einer Runde, also ist turns.length die Anzahl der *beendeten* Runden.
+		// Für den Durchschnitt müssen wir die aktuelle (laufende) Runde als 1 zählen.
+		const drillTurns = player.turns.length + 1;
 
+		let ppt = 0;
+		if (drillTurns > 0) {
+			ppt = totalScoreDrill / drillTurns;
+		}
+
+		player.livePpt = ppt.toFixed(1);
+		
         // A) Wurf 1 & 2: Kein Overlay, weiterwerfen
         if (session.tempDarts.length < 3) {
             return { 

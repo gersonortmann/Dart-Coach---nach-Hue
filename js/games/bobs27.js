@@ -34,16 +34,29 @@ export const Bobs27 = {
 
         const targetVal = targets[currentRoundIdx];
         
-        // Aggregate-Mode (Keypad): _aggregateHits enthält 0-3
-        // Per-Dart-Mode (Zukunft): Prüfe ob es ein Double auf das Target ist
+        // Hits ermitteln (Funktioniert für Tasten 0-3 UND Dart-Wurf)
         const hits = dart._isAggregate 
             ? dart._aggregateHits 
             : (dart.multiplier === 2 && dart.base === targetVal ? 1 : 0);
         
-        const targetScoreValue = targetVal * 2; // Bull 25 * 2 = 50, D20 = 40
-        
+        const targetScoreValue = targetVal * 2; 
         let scoreChange = 0;
-        
+
+        // --- LIVE STATS: TOTAL HITS ---
+        // Wir nehmen die Variable 'hits' von oben, da sie bereits das Ergebnis 
+        // dieses Wurfs (oder dieser Button-Eingabe) ist.
+        let bobsHits = hits; 
+
+        // Historie dazu addieren
+        (player.turns || []).forEach(t => {
+            if (typeof t.hits === 'number') {
+                bobsHits += t.hits;
+            }
+        });
+
+        player.liveBobsHits = bobsHits;
+        // ------------------------------
+
         if (hits > 0) {
             scoreChange = targetScoreValue * hits;
             player.currentResidual += scoreChange;
@@ -54,9 +67,9 @@ export const Bobs27 = {
 
         player.scoreHistory.push(player.currentResidual);
         
-		session.tempDarts.push(dart);
-		
-        // Turn Loggen
+        // Jetzt erst pushen wir den Dart/Input
+        session.tempDarts.push(dart);
+        
         player.turns.push({
             hits: hits,
             score: player.currentResidual,
@@ -73,7 +86,6 @@ export const Bobs27 = {
         if (player.currentResidual < 0) {
             player.isEliminated = true;
             player.finished = true;
-            
             overlayText = "BUST";
             overlayType = 'bust'; 
         }

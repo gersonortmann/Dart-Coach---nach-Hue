@@ -71,7 +71,7 @@ export const CheckoutChallenge = {
         const newResidual = player._residual - val;
 
         session.tempDarts.push(dart);
-
+	
         // 1. CHECKOUT GESCHAFFT (WIN)
         if (newResidual === 0 && (!doubleOutRequired || isDouble)) {
             // Punkte: Wert des Checkouts + Bonus (5 Punkte pro gespartem Dart)
