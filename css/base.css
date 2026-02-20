@@ -123,8 +123,8 @@ header h2 {
     margin: 0; white-space: nowrap; justify-self: center; text-align: center;
 }
 
-.header-left { display: flex; gap: var(--gap-sm); justify-self: start; }
-.header-right { display: flex; gap: var(--gap-sm); justify-self: end; }
+.header-left { display: flex; gap: var(--gap-sm); justify-self: start; align-items: center;}
+.header-right { display: flex; gap: var(--gap-sm); justify-self: end; align-items: center;}
 
 .header-btn {
     background: var(--bg-card); 
@@ -135,6 +135,7 @@ header h2 {
     cursor: pointer; height: 36px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1rem; transition: all 0.2s ease;
+	gap: 8px;
 }
 .header-btn:hover { 
     background: var(--gray-500); /* Variable statt #444 */

@@ -717,105 +717,295 @@ export const Management = {
             `)}
 
             ${cfg.isEnabled ? `
-                ${this._section('Bridge-Verbindung', `
+                ${this._section('Verbindung & Geräte', `
                     <div class="mgmt-field">
-                        <label class="mgmt-lbl">Bridge IP-Adresse</label>
-                        <div class="mgmt-ip-row">
-                            <input type="text" id="hue-ip" class="mgmt-input mgmt-input-grow" value="${cfg.bridgeIp || ''}" placeholder="192.168.178.40">
-                            <button id="hue-disc" class="mgmt-btn-sm">🔍 Suchen</button>
+                        <label class="mgmt-lbl">Bridge IP</label>
+                        <div class="mgmt-ip-row" style="display:flex; gap:10px;">
+                            <input type="text" id="hue-ip" class="mgmt-input" style="flex:1;" value="${cfg.bridgeIp || ''}" placeholder="192.168.178.xx">
+                            <button id="hue-disc" class="mgmt-btn-sm" title="Im Netzwerk suchen">🔍</button>
                             <button id="hue-conn" class="mgmt-btn-sm mgmt-btn-accent">Verbinden</button>
+                            ${ok ? `<button id="hue-test-conn" class="mgmt-btn-sm" style="background:#ef4444; color:white;" title="Testsignal senden (Rot)">Test</button>` : ''}
                         </div>
-                        <div class="mgmt-hint">Automatische Suche oder IP manuell eingeben (Hue App → Einstellungen → Bridge)</div>
                     </div>
 
                     ${cfg.isConnected ? `
-                        <div class="mgmt-info-table" style="margin-top:12px;">
-                            <div class="mgmt-info-row"><span class="mgmt-info-k">Leuchte</span><span class="mgmt-info-v">${cfg.lightId ? 'ID ' + cfg.lightId : '⚠ Nicht gefunden'}</span></div>
-                            <div class="mgmt-info-row"><span class="mgmt-info-k">Raum/Gruppe</span><span class="mgmt-info-v">${cfg.groupId ? 'ID ' + cfg.groupId : '⚠ Nicht gefunden'}</span></div>
-                            <div class="mgmt-info-row"><span class="mgmt-info-k">API-Key</span><span class="mgmt-info-v mgmt-mono">${cfg.username ? cfg.username.substring(0, 16) + '…' : '–'}</span></div>
+                        <div id="hue-res-loading" style="margin-top:16px; color:#888;">Lade Geräte...</div>
+                        <div id="hue-res-container" style="display:none; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px; border-top:1px solid #444; padding-top:15px;">
+                            <div>
+                                <label class="mgmt-lbl">1. Raum (Pflicht)</label>
+                                <select id="hue-sel-group" class="mgmt-input" style="width:100%;"></select>
+                            </div>
+                            <div>
+                                <label class="mgmt-lbl">2. Lampe (Optional)</label>
+                                <select id="hue-sel-light" class="mgmt-input" style="width:100%;"></select>
+                            </div>
                         </div>
-                        <div class="mgmt-hint" style="margin-top:8px;">Die App sucht automatisch nach Leuchten mit "dart" oder "lightstrip" im Namen.</div>
                     ` : `
-                        <details class="mgmt-help" style="margin-top:12px;">
-                            <summary>❓ Verbindungsprobleme?</summary>
-                            <ol class="mgmt-help-ol">
-                                <li><strong>🔍 Suchen</strong> klicken — die Bridge wird im Netzwerk gesucht.</li>
-                                <li>Falls die Suche fehlschlägt, IP manuell eingeben.</li>
-                                <li><strong>Verbinden</strong> klicken. Falls der Browser blockiert (HTTPS), öffne <code>https://[IP]/api/config</code> in neuem Tab und akzeptiere das Zertifikat.</li>
-                                <li>Danach erneut <strong>Verbinden</strong>.</li>
-                            </ol>
-                        </details>
+                        <div class="mgmt-hint" style="margin-top:10px;">Bitte IP suchen oder eingeben und verbinden.</div>
                     `}
                 `)}
             ` : ''}
 
             ${ok ? `
-                ${this._section('Effekte & Dauer', `
-                    ${this._hueSlider('hit', 'Treffer (grün pulsieren)', appSettings.hue.effectDuration.hit, 200, 2000)}
-                    ${this._hueSlider('miss', 'Fehlwurf (rot pulsieren)', appSettings.hue.effectDuration.miss, 200, 2000)}
-                    ${this._hueSlider('highScore', 'Highscore ≥100 (Party-Effekt)', appSettings.hue.effectDuration.highScore, 1000, 10000)}
-                    ${this._hueSlider('oneEighty', '180 / Checkout (Colorloop)', appSettings.hue.effectDuration.oneEighty, 2000, 15000)}
-
-                    <div class="mgmt-field" style="margin-top:16px;">
-                        <label class="mgmt-lbl">Effekte testen</label>
-                        <div class="mgmt-test-row">
-                            <button class="mgmt-btn-test" data-fx="HIT">💚 Treffer</button>
-                            <button class="mgmt-btn-test" data-fx="MISS">❤️ Miss</button>
-                            <button class="mgmt-btn-test" data-fx="HIGH_SCORE">🎉 High</button>
-                            <button class="mgmt-btn-test" data-fx="180">🏆 180</button>
+                ${this._section('Effekte & Szenen Zuweisung', `
+                    <div id="hue-config-loading" style="display:none; color:#888;">Lade Szenen...</div>
+                    <div id="hue-config-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                         </div>
-                    </div>
                 `)}
             ` : ''}
         `;
 
-        // ── Toggle ──
+        // ── EVENT LISTENER (Basis) ──
         const btnPwr = el.querySelector('#hue-pwr');
-        if (btnPwr) btnPwr.onclick = () => { HueService.toggleEnabled(); this._renderHue(el); };
+        if(btnPwr) btnPwr.onclick = () => { HueService.toggleEnabled(); this._renderHue(el); };
 
-        // ── Discover ──
         const btnDisc = el.querySelector('#hue-disc');
         if (btnDisc) btnDisc.onclick = async () => {
-            btnDisc.textContent = '⏳ Suche…'; btnDisc.disabled = true;
+            const originalText = btnDisc.textContent; // Icon merken
+            btnDisc.textContent = '⏳'; 
+            btnDisc.disabled = true;
+            
             const ip = await HueService.discoverBridge();
+            
             const inp = el.querySelector('#hue-ip');
-            if (inp && ip) inp.value = ip;
-            btnDisc.textContent = ip ? '✅ Gefunden' : '❌ Fehler';
-            setTimeout(() => { btnDisc.textContent = '🔍 Suchen'; btnDisc.disabled = false; }, 2000);
+            
+            if (ip) {
+                if (inp) inp.value = ip;
+                btnDisc.textContent = '✅';
+                // Optional: Automatisch verbinden probieren
+            } else {
+                // Fehlerfall: Visuelles Feedback, dass Cloud nicht ging
+                btnDisc.textContent = '❌';
+                btnDisc.title = "Cloud-Suche blockiert. Bitte IP manuell eingeben.";
+                
+                // Falls wir noch keine IP im Feld haben, zeigen wir einen Hint
+                if (inp && !inp.value) {
+                    inp.placeholder = "Bitte IP manuell eingeben (z.B. 192.168.178.xx)";
+                    inp.focus();
+                }
+            }
+            
+            setTimeout(() => { 
+                btnDisc.textContent = originalText; 
+                btnDisc.disabled = false; 
+                btnDisc.title = "Im Netzwerk suchen";
+            }, 2000);
         };
 
-        // ── Connect ──
         const btnConn = el.querySelector('#hue-conn');
-        if (btnConn) btnConn.onclick = async () => {
+        if(btnConn) btnConn.onclick = async () => {
             const inp = el.querySelector('#hue-ip');
-            const ip = inp?.value?.trim();
-            if (!ip) return;
-            const c = HueService.getConfig();
-            c.bridgeIp = ip;
-            HueService._saveConfig();
-            btnConn.textContent = '⏳'; btnConn.disabled = true;
-            const success = await HueService.checkConnection();
-            btnConn.disabled = false;
-            if (success) { this._renderHue(el); }
-            else { btnConn.textContent = '❌ Fehler'; setTimeout(() => { btnConn.textContent = 'Verbinden'; }, 2000); }
+            const ip = inp?.value.trim();
+            
+            if(ip) {
+                btnConn.textContent = '⏳';
+                btnConn.disabled = true;
+
+                HueService.getConfig().bridgeIp = ip;
+                HueService.setSelection(); // Speichert die IP
+
+                // Check Connection
+                const success = await HueService.checkConnection();
+                
+                if (success) {
+                    this._renderHue(el); // Alles gut, neu rendern
+                } else {
+                    // FEHLER: Modal anzeigen!
+                    btnConn.textContent = '❌ Blockiert';
+                    UI.showHueCertError(ip); // <--- HIER RUFEN WIR DAS MODAL AUF
+                    
+                    setTimeout(() => { 
+                        btnConn.textContent = 'Verbinden'; 
+                        btnConn.disabled = false; 
+                    }, 2000);
+                }
+            }
         };
 
-        // ── Effect sliders ──
-        el.querySelectorAll('.hue-sl').forEach(slider => {
-            const k = slider.dataset.k;
-            const v = el.querySelector(`.hue-sv[data-k="${k}"]`);
-            slider.oninput = () => { v.textContent = (parseInt(slider.value)/1000).toFixed(1) + 's'; };
-            slider.onchange = () => { appSettings.hue.effectDuration[k] = parseInt(slider.value); _saveSettings(); this._flash(slider.parentElement); };
-        });
+        const btnTest = el.querySelector('#hue-test-conn');
+        if(btnTest) btnTest.onclick = () => {
+            // Option A: Einfacher Verbindungstest
+            HueService.pulseRed(1);
+        };
 
-        // ── Test buttons ──
-        el.querySelectorAll('.mgmt-btn-test').forEach(btn => {
-            btn.onclick = () => {
-                HueService.trigger(btn.dataset.fx);
-                btn.classList.add('mgmt-testing');
-                setTimeout(() => btn.classList.remove('mgmt-testing'), 1500);
+        // ── ASYNC LOADING ──
+        if (ok) {
+            this._loadHueResources(el, cfg);
+        }
+    },
+
+    async _loadHueResources(el, cfg) {
+        const res = await HueService.fetchResources();
+        
+        if(!res) {
+            // Zeige Fehlermeldung im UI
+            const errMsg = el.querySelector('#hue-res-loading');
+            if(errMsg) {
+                errMsg.innerHTML = `
+                    <div style="color:#ef4444; border:1px solid #ef4444; padding:10px; border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+                        <span>Verbindung zur Bridge fehlgeschlagen.</span>
+                        <button id="btn-fix-cert" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Beheben</button>
+                    </div>
+                `;
+                // Button Event binden
+                const btn = errMsg.querySelector('#btn-fix-cert');
+                if(btn) btn.onclick = () => UI.showHueCertError(cfg.bridgeIp);
+            }
+            return;
+        }
+
+        const container = el.querySelector('#hue-res-container');
+        const loadMsg = el.querySelector('#hue-res-loading');
+        const groupSel = el.querySelector('#hue-sel-group');
+        const lightSel = el.querySelector('#hue-sel-light');
+
+        loadMsg.style.display = 'none';
+        container.style.display = 'grid';
+
+        // 1. Gruppen füllen
+        let gHtml = '<option value="">-- Wählen --</option>';
+        res.groups.forEach(g => {
+            gHtml += `<option value="${g.id}" ${cfg.groupId === g.id ? 'selected' : ''}>${g.name}</option>`;
+        });
+        groupSel.innerHTML = gHtml;
+
+        // 2. Lampen füllen Funktion
+        const fillLights = (gid) => {
+            const grp = res.groups.find(g => g.id === gid);
+            let lHtml = '<option value="">-- Alle im Raum --</option>';
+            if(grp) {
+                // Filtern
+                const lList = res.lights.filter(l => grp.lights.includes(l.id));
+                lList.forEach(l => {
+                    lHtml += `<option value="${l.id}" ${cfg.lightId === l.id ? 'selected' : ''}>${l.name}</option>`;
+                });
+            }
+            lightSel.innerHTML = lHtml;
+        };
+
+        // Initial Lampen
+        if(cfg.groupId) fillLights(cfg.groupId);
+        else lightSel.innerHTML = '<option value="" disabled>Erst Raum wählen</option>';
+
+        // 3. Wenn Gruppe gewählt, Szenen laden und Config anzeigen
+        if(cfg.groupId) {
+            await this._loadHueScenesAndConfig(el, cfg.groupId);
+        }
+
+        // --- Change Listener ---
+        groupSel.onchange = async () => {
+            const gid = groupSel.value;
+            HueService.setSelection(undefined, gid);
+            fillLights(gid);
+            // Szenen neu laden
+            if(gid) await this._loadHueScenesAndConfig(el, gid);
+        };
+
+        lightSel.onchange = () => {
+            HueService.setSelection(lightSel.value, groupSel.value);
+        };
+    },
+
+    async _loadHueScenesAndConfig(el, groupId) {
+        const loader = el.querySelector('#hue-config-loading');
+        const grid = el.querySelector('#hue-config-grid');
+        
+        if(loader) loader.style.display = 'block';
+        if(grid) grid.style.display = 'none';
+
+        // Szenen von der Bridge holen
+        await HueService.fetchScenes(groupId);
+        
+        if(loader) loader.style.display = 'none';
+        if(grid) {
+            grid.style.display = 'grid';
+            this._renderHueConfigLists(grid);
+        }
+    },
+
+    _renderHueConfigLists(container) {
+        const consts = HueService.getConstants();
+        const cfg = HueService.getConfig().config;
+
+        // --- SPALTE 1: EREIGNISSE ---
+        let col1 = `<div><h5 style="margin:0 0 10px 0; color:var(--accent-color);">Ereignisse</h5>`;
+        consts.EVENTS.forEach(ev => {
+            const currentVal = cfg.events[ev.id];
+            col1 += `
+                <div style="margin-bottom:10px;">
+                    <label class="mgmt-lbl" style="font-size:0.8rem;">${ev.label}</label>
+                    ${this._buildEffectDropdown('events', ev.id, currentVal)}
+                </div>
+            `;
+        });
+        col1 += `</div>`;
+
+        // --- SPALTE 2: SCREENS ---
+        let col2 = `<div><h5 style="margin:0 0 10px 0; color:var(--accent-color);">Screens (Stimmung)</h5>`;
+        consts.SCREENS.forEach(sc => {
+            const currentVal = cfg.screens[sc.id];
+            col2 += `
+                <div style="margin-bottom:10px;">
+                    <label class="mgmt-lbl" style="font-size:0.8rem;">${sc.label}</label>
+                    ${this._buildEffectDropdown('screens', sc.id, currentVal)}
+                </div>
+            `;
+        });
+        col2 += `</div>`;
+
+        container.innerHTML = col1 + col2;
+
+        // Listener für alle Dropdowns
+        container.querySelectorAll('select').forEach(sel => {
+            sel.onchange = (e) => {
+                const category = e.target.dataset.cat; // 'events' oder 'screens'
+                const key = e.target.dataset.key;      // 'HIT' oder 'screen-game'
+                HueService.setConfigValue(category, key, e.target.value);
+                
+                // Optional: Kurzes visuelles Feedback über den Test-Befehl?
+                // HueService.executeEffect(e.target.value); 
             };
         });
+    },
+
+    _buildEffectDropdown(category, key, currentValue) {
+        const specials = HueService.getSpecials();
+        const colors = HueService.getColors();
+        const scenes = HueService.getScenes();
+
+        let html = `<select class="mgmt-input" style="width:100%; font-size:0.85rem;" data-cat="${category}" data-key="${key}">`;
+        html += `<option value="">-- Aus / Nichts --</option>`;
+
+        // 1. Optgroup: Spezial
+        html += `<optgroup label="Spezial-Effekte">`;
+        Object.entries(specials).forEach(([k, v]) => {
+            const val = `cmd:${k}`;
+            html += `<option value="${val}" ${currentValue === val ? 'selected' : ''}>✨ ${v.name}</option>`;
+        });
+        html += `</optgroup>`;
+
+        // 2. Optgroup: Farben
+        html += `<optgroup label="Farben (Statisch)">`;
+        Object.entries(colors).forEach(([k, v]) => {
+            const val = `color:${k}`;
+            html += `<option value="${val}" ${currentValue === val ? 'selected' : ''}>🎨 ${v.name}</option>`;
+        });
+        html += `</optgroup>`;
+
+        // 3. Optgroup: Szenen (nur wenn vorhanden)
+        if (scenes.length > 0) {
+            html += `<optgroup label="Meine Szenen (Bridge)">`;
+            scenes.forEach(s => {
+                const val = `scene:${s.id}`;
+                html += `<option value="${val}" ${currentValue === val ? 'selected' : ''}>🏞️ ${s.name}</option>`;
+            });
+            html += `</optgroup>`;
+        } else {
+            html += `<optgroup label="Szenen"><option disabled>(Keine Szenen im Raum)</option></optgroup>`;
+        }
+
+        html += `</select>`;
+        return html;
     },
 
     _hueSlider(key, label, val, min, max) {

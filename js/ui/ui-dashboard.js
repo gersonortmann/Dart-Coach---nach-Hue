@@ -68,7 +68,7 @@ export const Dashboard = {
         const greeting = this._getGreeting();
         const playerName = player ? player.name : 'Gast';
 
-        // Player selector dropdown (nur wenn >1 Spieler)
+        // Player selector dropdown
         let selectorHtml = '';
         if (players.length > 1) {
             const opts = players.map(p =>
@@ -83,12 +83,23 @@ export const Dashboard = {
 
         return `
             <div class="dash-header">
-                <div class="dash-header-top">
-                    <div class="dash-greeting">
-                        <span class="dash-greeting-text">${greeting},</span>
+                <div class="dash-header-grid">
+                    
+                    <div></div>
+
+                    <div class="dash-greeting" style="display: flex; align-items: baseline; gap: 8px; justify-content: center;">
+                        <span class="dash-greeting-text" style="white-space: nowrap;">${greeting},</span>
                         ${selectorHtml}
                     </div>
+
+                    <div class="dash-header-actions">
+                        <button id="dash-go-stats" class="header-btn" style="width: auto; padding: 0 15px; display: flex; align-items: center; gap: 8px; ">
+                            <span style="font-size: 1.1rem;">📊</span>
+                            <span style="font-weight: 600; font-size: 0.9rem;">Statistik öffnen</span>
+                        </button>
+                    </div>
                 </div>
+                
                 <p class="dash-subtitle">Jeder Dart zählt. Heute wirst du besser als gestern.</p>
             </div>
         `;
@@ -96,19 +107,25 @@ export const Dashboard = {
 
     _renderMatchSection(player) {
         const matchGames = Object.entries(GAMES).filter(([, g]) => g.category === 'match');
-
+        
         const cards = matchGames.map(([id, game]) => {
             const stat = player ? this._getQuickStat(player, id) : null;
             return this._renderMatchCard(id, game, stat);
         }).join('');
 
+        // MATCH ist standardmäßig offen ("open" Klasse)
         return `
-            <div class="dash-section">
-                <div class="dash-section-header">
-                    <span class="dash-section-icon">⚔️</span>
-                    <h3 class="dash-section-title">MATCH</h3>
+            <div class="dash-acc-item" data-acc-id="match">
+                <div class="dash-acc-header">
+                    <div class="dash-acc-title-group">
+                        <span class="dash-acc-icon">⚔️</span>
+                        <span class="dash-acc-text">MATCH</span>
+                    </div>
+                    <span class="dash-acc-arrow">▼</span>
                 </div>
-                <div class="dash-match-grid">${cards}</div>
+                <div class="dash-acc-content">
+                    <div class="dash-match-grid">${cards}</div>
+                </div>
             </div>
         `;
     },
@@ -144,13 +161,19 @@ export const Dashboard = {
             return this._renderTrainingCard(id, game, stat);
         }).join('');
 
+        // TRAINING ist standardmäßig zu (keine "open" Klasse)
         return `
-            <div class="dash-section">
-                <div class="dash-section-header">
-                    <span class="dash-section-icon">🏋️</span>
-                    <h3 class="dash-section-title">TRAINING</h3>
+            <div class="dash-acc-item open" data-acc-id="training">
+                <div class="dash-acc-header">
+                    <div class="dash-acc-title-group">
+                        <span class="dash-acc-icon">🏋️</span>
+                        <span class="dash-acc-text">TRAINING</span>
+                    </div>
+                    <span class="dash-acc-arrow">▼</span>
                 </div>
-                <div class="dash-training-grid">${cards}</div>
+                <div class="dash-acc-content">
+                    <div class="dash-training-grid">${cards}</div>
+                </div>
             </div>
         `;
     },
@@ -178,13 +201,19 @@ export const Dashboard = {
             return this._renderTrainingPlanCard(id, game);
         }).join('');
 
+        // PLÄNE sind standardmäßig zu
         return `
-            <div class="dash-section">
-                <div class="dash-section-header">
-                    <span class="dash-section-icon">📋</span>
-                    <h3 class="dash-section-title">TRAININGSPLÄNE</h3>
+            <div class="dash-acc-item" data-acc-id="plans">
+                <div class="dash-acc-header">
+                    <div class="dash-acc-title-group">
+                        <span class="dash-acc-icon">📋</span>
+                        <span class="dash-acc-text">TRAININGSPLÄNE</span>
+                    </div>
+                    <span class="dash-acc-arrow">▼</span>
                 </div>
-                <div class="dash-training-grid">${cards}</div>
+                <div class="dash-acc-content">
+                    <div class="dash-training-grid">${cards}</div>
+                </div>
             </div>
         `;
     },
@@ -204,15 +233,8 @@ export const Dashboard = {
 
     _renderQuickNav() {
         return `
-            <div class="dash-quicknav">
-                <button class="dash-nav-btn" id="dash-go-stats">
-                    <span class="dash-nav-icon">📊</span>
-                    <span>Statistik</span>
-                </button>
-                <button class="dash-nav-btn" id="dash-go-settings">
-                    <span class="dash-nav-icon">⚙️</span>
-                    <span>Verwaltung</span>
-                </button>
+            <div class="dash-quicknav" style="display:flex; justify-content:center; padding: 20px 0; color: #444; font-size: 1.2rem; font-style: italic;">
+                Mit ♥️ und Claude entwickelt.
             </div>
         `;
     },
@@ -230,6 +252,27 @@ export const Dashboard = {
                 this.render();
             };
         }
+		
+		const accHeaders = document.querySelectorAll('.dash-acc-header');
+        accHeaders.forEach(header => {
+            header.onclick = () => {
+                const item = header.closest('.dash-acc-item');
+                const wasOpen = item.classList.contains('open');
+
+                // 1. Alle schließen (Exklusives Verhalten)
+                document.querySelectorAll('.dash-acc-item').forEach(i => i.classList.remove('open'));
+
+                // 2. Geklicktes öffnen (wenn es vorher zu war)
+                if (!wasOpen) {
+                    item.classList.add('open');
+                    
+                    // Optional: Sanft zum geöffneten Element scrollen, falls es außerhalb liegt
+                    setTimeout(() => {
+                        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
+                }
+            };
+        });
 
         // 2. REGULÄRE SPIELE (Match & Training) - DAS FEHLTE
         document.querySelectorAll('.dash-card[data-game]').forEach(card => {
@@ -261,7 +304,7 @@ export const Dashboard = {
             btnStats.onclick = () => {
                 // Delegate to existing Stats init from ui-core
                 const { Stats } = window._dashModules || {};
-                if (Stats) Stats.init();
+                if (Stats) Stats.init(activePlayerId);
                 UI.showScreen('screen-stats');
             };
         }

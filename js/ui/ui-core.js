@@ -29,23 +29,23 @@ const GAME_NAMES = {
 
 const SCREEN_CONFIG = {
     'screen-login': { 
-        home: false, restart: false, logout: false, 
+        home: false, restart: false, logout: false, settings: false,
         badge: false, title: "🎯 DART COACH V2" 
     },
     'screen-dashboard': { 
-        home: false, restart: false, logout: true, 
+        home: false, restart: false, logout: true, settings: true,
         badge: false, title: "Dart Coach V2.0 by Schlomo" 
     },
     'screen-match-setup': { 
-        home: true, restart: false, logout: false, 
+        home: true, restart: false, logout: false,  settings: false,
         badge: false, title: "DYNAMIC_SETUP" // Platzhalter für dynamischen Titel
     },
     'screen-game': { 
-        home: true, restart: true, logout: false, 
+        home: true, restart: true, logout: false,  settings: false,
         badge: true, title: "DYNAMIC_GAME"   // Platzhalter für dynamischen Titel
     },
     'screen-result': { 
-        home: false, restart: false, logout: false, 
+        home: false, restart: false, logout: false,  settings: false,
         badge: false, title: "MATCH RESULT" 
     }
 };
@@ -57,11 +57,13 @@ function _updateHeaderButtons(config) {
     const btnRestart = document.getElementById('btn-restart');
     const btnLogout = document.getElementById('btn-logout'); 
     const adBadge = document.getElementById('ad-status-badge');
+	const btnSettings = document.getElementById('btn-settings');
 
     // Sichtbarkeit setzen (Fallback auf 'none' wenn Element fehlt)
     if (btnHome) btnHome.style.display = config.home ? 'flex' : 'none';
     if (btnRestart) btnRestart.style.display = config.restart ? 'flex' : 'none';
     if (btnLogout) btnLogout.style.display = config.logout ? 'flex' : 'none';
+	if (btnSettings) btnSettings.style.display = config.settings ? 'flex' : 'none';
 
     // Autodarts Badge Logik
     if (adBadge) {
@@ -265,7 +267,54 @@ export const UI = {
 	showMatchModal: _showMatchModal,
 	showOverlay: (t, type) => Game.showOverlay(t, type),
 	// showOverlay: (content, type) => { if(Game) Game.showOverlay(content, type); },
+	
+	showHueCertError: function(bridgeIp) {
+        if (!bridgeIp) return;
+        const url = `https://${bridgeIp}/api/config`;
 
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay active'; // 'active' damit es sofort sichtbar ist
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <h2 style="color:#ef4444; margin-top:0;">⚠️ Verbindung blockiert</h2>
+                <p style="color:#ccc; line-height:1.5;">
+                    Der Browser blockiert den Zugriff auf deine Hue Bridge (${bridgeIp}), da ihr lokales Zertifikat nicht erkannt wird. Das ist normal.
+                </p>
+                
+                <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; margin:15px 0; text-align:left; font-size:0.9rem;">
+                    <strong>Lösung (Einmalig):</strong>
+                    <ol style="margin-left:20px; margin-top:5px; color:#aaa;">
+                        <li>Klicke unten auf den Button "Zertifikat akzeptieren".</li>
+                        <li>Es öffnet sich ein neuer Tab mit einer Warnung ("Nicht sicher").</li>
+                        <li>Klicke dort auf <strong>"Erweitert"</strong> und dann auf <strong>"Weiter zu ${bridgeIp} (unsicher)"</strong>.</li>
+                        <li>Sobald du dort Text (JSON) siehst, schließe den Tab und klicke hier erneut auf "Verbinden".</li>
+                    </ol>
+                </div>
+
+                <div class="modal-buttons">
+                    <button id="btn-open-cert" class="modal-btn" style="background:var(--accent-color); color:#000; font-weight:bold;">
+                        Zertifikat akzeptieren 🔗
+                    </button>
+                    <button id="btn-close-cert" class="modal-btn btn-no">
+                        Schließen
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Events
+        modal.querySelector('#btn-open-cert').onclick = () => {
+            window.open(url, '_blank');
+        };
+
+        modal.querySelector('#btn-close-cert').onclick = () => {
+            if(modal.parentNode) document.body.removeChild(modal);
+        };
+    },
+	
     init: function() {
         // SUB-MODULE INITIALISIEREN
         if(Auth) Auth.init();
@@ -328,6 +377,16 @@ export const UI = {
             ); 
         });
 		
+		const btnSettings = document.getElementById('btn-settings');
+        if (btnSettings) {
+            btnSettings.addEventListener('click', () => {
+                // Management Modul initialisieren (lädt Settings aus localStorage)
+                if (Management) Management.init();
+                // Screen wechseln
+                this.showScreen('screen-management');
+            });
+        };
+		
 		AutodartsService.setStatusListener((status) => {
             const badge = document.getElementById('ad-status-badge');
             const text = document.getElementById('ad-status-text');
@@ -344,6 +403,8 @@ export const UI = {
 		
         this.showScreen('screen-login');
     },
+	
+	
 
     onLoginSuccess: async function() { 
         await State.initAfterLogin(); 

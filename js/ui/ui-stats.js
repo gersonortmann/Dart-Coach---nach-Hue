@@ -4,12 +4,11 @@ import { UI } from './ui-core.js';
 import { StatsBoard } from './ui-stats-board.js';
 
 export const Stats = {
-    init: function() {
-        // 1. Container finden (KORREKTUR: .stats-filter-row statt .stats-header)
+    // NEU: Parameter preSelectedPlayerId hinzugefügt
+    init: function(preSelectedPlayerId) {
+        // 1. Container finden (Bleibt gleich)
         const filterRow = document.querySelector('.stats-filter-row');
-        
         if (filterRow) {
-            // Prüfen, ob der 4. Filter schon da ist, um doppeltes Einfügen zu verhindern
             if (!document.getElementById('stats-mode-filter')) {
                 filterRow.innerHTML = `
                     <select id="stats-player-select" class="stats-dropdown"></select>
@@ -28,7 +27,6 @@ export const Stats = {
         const mFilter = document.getElementById('stats-mode-filter');
         const tFilter = document.getElementById('stats-time-filter');
 
-        // Sicherheitscheck, falls DOM nicht bereit ist
         if (!pSelect || !gSelect || !tFilter) return;
 
         // 3. Spieler laden
@@ -38,14 +36,23 @@ export const Stats = {
             return;
         }
 
-        // Falls wir neu rendern, behalten wir die Auswahl bei oder setzen zurück
-        // Hier einfacher Reset oder Neubefüllung:
-        const currentP = pSelect.value;
+        // Dropdown befüllen
         pSelect.innerHTML = players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        if(currentP && players.find(p => p.id === currentP)) pSelect.value = currentP;
-        
-        // 4. Spiel-Optionen befüllen (nur wenn leer oder Reset gewünscht, hier statisch ok)
-        // Wir setzen die Optionen neu, um sicherzugehen
+
+        // --- VORAUSWAHL LOGIK (NEU) ---
+        // Priorität: 1. Übergebener Parameter, 2. Bestehende Auswahl, 3. Erster Spieler
+        let targetId = preSelectedPlayerId;
+        if (!targetId) targetId = pSelect.value; 
+
+        // Prüfen ob ID gültig ist
+        if (targetId && players.find(p => p.id === targetId)) {
+            pSelect.value = targetId;
+        } else if (players.length > 0) {
+            pSelect.value = players[0].id;
+        }
+        // ------------------------------
+
+        // 4. Spiel-Optionen befüllen (Bleibt gleich...)
         const currentG = gSelect.value;
         gSelect.innerHTML = `
             <option value="x01">X01 Match</option>
@@ -54,6 +61,9 @@ export const Stats = {
             <option value="single-training">Single Training</option>
 			<option value="around-the-board">Around the Board</option>
 			<option value="bobs27">Bob's 27</option>
+            <option value="checkout-challenge">Checkout Challenge</option>
+            <option value="halve-it">Halve It</option>
+            <option value="scoring-drill">Scoring Drill</option>
         `;
         if(currentG) gSelect.value = currentG;
 		

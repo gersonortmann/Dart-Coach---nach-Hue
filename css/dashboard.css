@@ -86,6 +86,30 @@
     font-style: italic;
 }
 
+.dash-header-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr; /* Links leer, Mitte Name, Rechts Button */
+    align-items: center;
+    width: 100%;
+}
+
+.dash-header-actions {
+    justify-self: center; /* Schiebt den Button ganz nach rechts */
+}
+
+/* Mobile Anpassung: Wenn es zu eng wird, untereinander */
+@media (max-width: 480px) {
+    .dash-header-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .dash-header-actions {
+        padding-left: 0;
+        justify-self: center;
+    }
+}
+
 /* ─── SECTION HEADERS ───────────────────────────────────────── */
 
 .dash-section {
@@ -494,4 +518,91 @@
 .dash-card-match:hover::after {
     opacity: 1;
     animation: dash-card-shimmer 2s ease infinite;
+}
+
+/* =========================================
+   DASHBOARD ACCORDION
+   ========================================= */
+
+.dash-acc-item {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    margin-bottom: var(--gap-md);
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Der Header zum Klicken */
+.dash-acc-header {
+    padding: 15px 20px;
+    background: var(--bg-panel); /* Oder var(--bg-card) für Kontrast */
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background 0.2s;
+}
+
+.dash-acc-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Titel-Styling im Header */
+.dash-acc-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.dash-acc-icon { font-size: 1.5rem; }
+.dash-acc-text { 
+    font-size: 1.2rem; 
+    font-weight: 800; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    color: var(--text-main);
+}
+
+/* Pfeil */
+.dash-acc-arrow {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+}
+
+/* --- STATE: OPEN --- */
+.dash-acc-item.open {
+    border: 2px solid var(--accent-glow);
+    box-shadow: var(--shadow-md);
+}
+
+.dash-acc-item.open .dash-acc-header {
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-card); /* Etwas heller wenn offen */
+}
+
+.dash-acc-item.open .dash-acc-arrow {
+    transform: rotate(180deg);
+    color: var(--accent-color);
+}
+
+/* Content Bereich (Wrapper für das Grid) */
+.dash-acc-content {
+    display: none; /* Standard: zu */
+    padding: 20px;
+    background: var(--bg-app); /* Dunkler Hintergrund für die Cards */
+    animation: slideDown 0.2s ease-out;
+}
+
+.dash-acc-item.open .dash-acc-content {
+    display: block; /* Inhalt anzeigen */
+}
+
+/* Animation Keyframes (falls noch nicht vorhanden) */
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
