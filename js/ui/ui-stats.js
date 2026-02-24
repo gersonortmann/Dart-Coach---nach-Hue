@@ -1,606 +1,695 @@
-import { State } from '../core/state.js';
-import { StatsService } from '../core/stats-service.js';
-import { UI } from './ui-core.js';
-import { StatsBoard } from './ui-stats-board.js';
+import { State }        from '../core/state.js';
+import { StatsService }  from '../core/stats-service.js';
+import { UI }            from './ui-core.js';
+import { StatsBoard }    from './ui-stats-board.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  KONSTANTEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CATEGORIES = [
+    {
+        id: 'match', label: 'Wettkampf', icon: '🏆',
+        games: [
+            { id: 'x01',     label: 'X01',    icon: '🎯' },
+            { id: 'cricket', label: 'Cricket', icon: '🏏' },
+        ]
+    },
+    {
+        id: 'target', label: 'Ziel-Training', icon: '🎪',
+        games: [
+            { id: 'single-training',  label: 'Single Training',  icon: '1️⃣' },
+            { id: 'around-the-board', label: 'Around the Board', icon: '🔄' },
+            { id: 'shanghai',         label: 'Shanghai',         icon: '🐉' },
+        ]
+    },
+    {
+        id: 'scoring', label: 'Scoring', icon: '📊',
+        games: [
+            { id: 'bobs27',             label: "Bob's 27",          icon: '🎲' },
+            { id: 'scoring-drill',      label: 'Scoring Drill',     icon: '⚡' },
+            { id: 'halve-it',           label: 'Halve It',          icon: '✂️' },
+            { id: 'checkout-challenge', label: 'Checkout Challenge', icon: '✅' },
+        ]
+    },
+];
+
+const VARIANTS = {
+    'x01':              [{ v:'all',l:'Alle' },{ v:'301',l:'301' },{ v:'501',l:'501' },{ v:'701',l:'701' }],
+    'cricket':          [{ v:'all',l:'Alle' },{ v:'nolimit',l:'Kein Limit' },{ v:'20',l:'20 Runden' },{ v:'10',l:'10 Runden' }],
+    'shanghai':         [{ v:'all',l:'Alle' },{ v:'7',l:'7 Runden' },{ v:'20',l:'20 Runden' }],
+    'around-the-board': [{ v:'all',l:'Alle' },{ v:'full',l:'Komplett' },{ v:'double',l:'Doubles' },{ v:'triple',l:'Triples' }],
+    'scoring-drill':    [{ v:'all',l:'Alle' },{ v:'33',l:'33 Darts' },{ v:'66',l:'66 Darts' },{ v:'99',l:'99 Darts' }],
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _playerId  = null;
+let _catId     = 'match';
+let _gameId    = 'x01';
+let _days      = '30';
+let _variant   = 'all';
+let _openMatch = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PUBLIC API
+// ═══════════════════════════════════════════════════════════════════════════
 
 export const Stats = {
-    // NEU: Parameter preSelectedPlayerId hinzugefügt
-    init: function(preSelectedPlayerId) {
-        // 1. Container finden (Bleibt gleich)
-        const filterRow = document.querySelector('.stats-filter-row');
-        if (filterRow) {
-            if (!document.getElementById('stats-mode-filter')) {
-                filterRow.innerHTML = `
-                    <select id="stats-player-select" class="stats-dropdown"></select>
-                    <select id="stats-game-select" class="stats-dropdown"></select>
-                    <select id="stats-mode-filter" class="stats-dropdown" disabled>
-                        <option value="all">Alle Modi</option>
-                    </select>
-                    <select id="stats-time-filter" class="stats-dropdown"></select>
-                `;
-            }
-        }
 
-        // 2. Referenzen holen
-        const pSelect = document.getElementById('stats-player-select');
-        const gSelect = document.getElementById('stats-game-select');
-        const mFilter = document.getElementById('stats-mode-filter');
-        const tFilter = document.getElementById('stats-time-filter');
+    init(preSelectedPlayerId) {
+        const root = document.getElementById('screen-stats');
+        if (!root) return;
 
-        if (!pSelect || !gSelect || !tFilter) return;
-
-        // 3. Spieler laden
         const players = State.getAvailablePlayers();
         if (players.length === 0) {
-            pSelect.innerHTML = '<option value="">Keine Spieler</option>';
+            root.innerHTML = `<div class="stats-empty-state"><span>👤</span><p>Noch keine Spieler angelegt.</p></div>`;
             return;
         }
 
-        // Dropdown befüllen
-        pSelect.innerHTML = players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-
-        // --- VORAUSWAHL LOGIK (NEU) ---
-        // Priorität: 1. Übergebener Parameter, 2. Bestehende Auswahl, 3. Erster Spieler
-        let targetId = preSelectedPlayerId;
-        if (!targetId) targetId = pSelect.value; 
-
-        // Prüfen ob ID gültig ist
-        if (targetId && players.find(p => p.id === targetId)) {
-            pSelect.value = targetId;
-        } else if (players.length > 0) {
-            pSelect.value = players[0].id;
+        if (preSelectedPlayerId && players.find(p => p.id === preSelectedPlayerId)) {
+            _playerId = preSelectedPlayerId;
+        } else if (!_playerId || !players.find(p => p.id === _playerId)) {
+            _playerId = players[0].id;
         }
-        // ------------------------------
 
-        // 4. Spiel-Optionen befüllen (Bleibt gleich...)
-        const currentG = gSelect.value;
-        gSelect.innerHTML = `
-            <option value="x01">X01 Match</option>
-            <option value="cricket">Cricket</option>
-            <option value="shanghai">Shanghai</option>
-            <option value="single-training">Single Training</option>
-			<option value="around-the-board">Around the Board</option>
-			<option value="bobs27">Bob's 27</option>
-            <option value="checkout-challenge">Checkout Challenge</option>
-            <option value="halve-it">Halve It</option>
-            <option value="scoring-drill">Scoring Drill</option>
-        `;
-        if(currentG) gSelect.value = currentG;
-		
-        const currentT = tFilter.value;
-		tFilter.innerHTML = `
-            <option value="today">Heute</option>
-            <option value="7">Letzte 7 Tage</option>
-            <option value="30" selected>Letzte 30 Tage</option>
-            <option value="365">Letztes Jahr</option>
-            <option value="all">Gesamter Zeitraum</option>
-        `;
-        if(currentT) tFilter.value = currentT;
+        this._renderShell(root, players);
+        this._renderContent();
+    },
 
-        // 5. Event Listener
-        pSelect.onchange = () => this.updateView();
-        
-        gSelect.onchange = () => {
-            if(mFilter) this.updateModeFilterOptions(gSelect.value, mFilter);
-            this.updateView();
+    updateView() { this._renderContent(); },
+
+    // ─── SHELL ───────────────────────────────────────────────────────────────
+
+    _renderShell(root, players) {
+        root.innerHTML = `
+            <div class="stats-layout">
+                <aside class="stats-sidebar">
+                    <div class="stats-sidebar-section">
+                        <label class="stats-sidebar-label">Spieler</label>
+                        <select id="st-player" class="stats-dropdown">
+                            ${players.map(p =>
+                                `<option value="${p.id}" ${p.id === _playerId ? 'selected' : ''}>${_esc(p.name)}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="stats-sidebar-section">
+                        <label class="stats-sidebar-label">Zeitraum</label>
+                        <select id="st-days" class="stats-dropdown">
+                            <option value="today" ${_days==='today'?'selected':''}>Heute</option>
+                            <option value="7"     ${_days==='7'    ?'selected':''}>7 Tage</option>
+                            <option value="30"    ${_days==='30'   ?'selected':''}>30 Tage</option>
+                            <option value="365"   ${_days==='365'  ?'selected':''}>1 Jahr</option>
+                            <option value="all"   ${_days==='all'  ?'selected':''}>Gesamt</option>
+                        </select>
+                    </div>
+                    <nav class="stats-nav" id="st-nav">
+                        ${CATEGORIES.map(cat => `
+                            <div class="stats-nav-cat ${cat.id === _catId ? 'open':''}" data-cat="${cat.id}">
+                                <button class="stats-nav-cat-btn ${cat.id === _catId ? 'active':''}">
+                                    <span>${cat.icon} ${cat.label}</span>
+                                    <span class="stats-nav-chevron">▾</span>
+                                </button>
+                                <div class="stats-nav-games">
+                                    ${cat.games.map(g => `
+                                        <button class="stats-nav-game ${g.id === _gameId ? 'active':''}" data-game="${g.id}">
+                                            ${g.icon} ${g.label}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </nav>
+                </aside>
+                <main class="stats-content" id="st-content">
+                    <div class="stats-loading">Lade…</div>
+                </main>
+            </div>
+        `;
+        this._bindShellEvents(root);
+    },
+
+    _bindShellEvents(root) {
+        root.querySelector('#st-player').onchange = e => {
+            _playerId = e.target.value; _openMatch = null; this._renderContent();
         };
-
-        if(mFilter) {
-            mFilter.onchange = () => this.updateView();
-            // Initial Optionen setzen für das aktuell gewählte Spiel
-            this.updateModeFilterOptions(gSelect.value || 'x01', mFilter);
-        }
-
-        tFilter.onchange = () => this.updateView();
-
-        // Initial View Update
-        this.updateView();
-    },
-
-    updateModeFilterOptions: function(gameType, filterEl) {
-        if(!filterEl) return;
-        
-        filterEl.disabled = false;
-        filterEl.style.opacity = "1";
-        let options = `<option value="all">Alle Varianten</option>`;
-
-        if (gameType === 'x01') {
-            options += `
-                <option value="sido">Single In - Double Out (Standard)</option>
-                <option value="siso">Single In - Single Out</option>
-                <option value="dido">Double In - Double Out</option>
-                <option value="diso">Double In - Single Out</option>
-            `;
-        } else if (gameType === 'shanghai') {
-            options += `
-                <option value="7">7 Runden</option>
-                <option value="20">20 Runden</option>
-            `;
-        } else if (gameType === 'cricket') {
-            options += `
-                <option value="nolimit">Kein Limit</option>
-                <option value="20">20 Runden</option>
-                <option value="10">10 Runden</option>
-            `;
-		} else if (gameType === 'around-the-board') {
-            options += `
-                <option value="full">Komplettes Segment</option>
-                <option value="single-inner">Innere Singles</option>
-                <option value="single-outer">Äußere Singles</option>
-                <option value="double">Nur Doubles</option>
-                <option value="triple">Nur Triples</option>
-            `;
-        } else {
-            // Für Training und Bob's 27 gibt es keine Varianten
-            options = `<option value="all">Standard</option>`;
-            filterEl.disabled = true;
-            filterEl.style.opacity = "0.5";
-        }
-
-        filterEl.innerHTML = options;
-    },
-
-    updateView: function() {
-		const pSelect = document.getElementById('stats-player-select');
-        const gSelect = document.getElementById('stats-game-select');
-        const tFilter = document.getElementById('stats-time-filter');
-        const mFilter = document.getElementById('stats-mode-filter');
-
-        if(!pSelect || !gSelect || !tFilter) return;
-
-		const playerId = pSelect.value;
-		const days = tFilter.value;
-		const gameType = gSelect.value;
-        const modeVariant = mFilter ? mFilter.value : 'all';
-		
-		const container = document.getElementById('stats-main-dashboard');
-		if (!container) return;
-
-		if (gameType === 'x01') {
-			const data = StatsService.getX01Stats(playerId, days, modeVariant);
-            if (!data) { this._renderEmpty(container); return; }
-			this.renderDashboardX01(container, data);
-		}
-        else if (gameType === 'cricket') {
-            const data = StatsService.getCricketStats(playerId, days, modeVariant);
-            if (!data) { this._renderEmpty(container); return; }
-            this.renderDashboardCricket(container, data);
-        }
-        else if (gameType === 'shanghai') {
-            const data = StatsService.getShanghaiStats(playerId, days, modeVariant);
-            if (!data) { this._renderEmpty(container); return; }
-            this.renderDashboardShanghai(container, data);
-        }
-        else if (gameType === 'single-training') {
-            const data = StatsService.getSingleTrainingStats(playerId, days);
-            if (!data) { this._renderEmpty(container); return; }
-            this.renderDashboardTraining(container, data);
-        }
-		else if (gameType === 'around-the-board') {
-            const data = StatsService.getAtcStats(playerId, days, modeVariant);
-            if (!data) { this._renderEmpty(container); return; }
-            this.renderDashboardAtc(container, data);
-        }
-		else if (gameType === 'bobs27') {
-            const data = StatsService.getBobs27Stats(playerId, days);
-            if (!data) { this._renderEmpty(container); return; }
-            this.renderDashboardBobs27(container, data);
-        }
-	},
-
-	_renderEmpty: function(container, msg = "Keine Daten für diese Auswahl.") {
-        container.innerHTML = `<p style="text-align:center; padding:50px; color:#666;">${msg}</p>`;
-    },
-	
-    // --- DASHBOARD RENDERER (Originale) ---
-
-	renderDashboardAtc: function(container, data) {
-        // Matrix HTML generieren
-        let matrixHTML = '<div class="atc-matrix-grid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; margin-bottom:20px;">';
-        
-        data.matrix.forEach(item => {
-            // Farben: Grün für wenig Darts, Rot für viele
-            let color = '#fff';
-            let bg = 'rgba(255,255,255,0.05)';
-            
-            const val = parseFloat(item.val);
-            if (!isNaN(val)) {
-                if (val <= 1.5) { color = '#00d26a'; bg = 'rgba(0, 210, 106, 0.15)'; }
-                else if (val <= 3.0) { color = '#fff'; }
-                else { color = '#f87171'; bg = 'rgba(248, 113, 113, 0.15)'; }
-            }
-
-            matrixHTML += `
-                <div style="background:${bg}; border-radius:6px; padding:8px 2px; text-align:center;">
-                    <div style="font-size:0.7rem; color:#888; margin-bottom:2px;">${item.label}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:${color};">${item.val}</div>
-                </div>
-            `;
+        root.querySelector('#st-days').onchange = e => {
+            _days = e.target.value; _openMatch = null; this._renderContent();
+        };
+        root.querySelectorAll('.stats-nav-cat-btn').forEach(btn => {
+            btn.onclick = () => {
+                const cat = btn.closest('.stats-nav-cat').dataset.cat;
+                if (_catId === cat) return;
+                _catId = cat;
+                const catDef = CATEGORIES.find(c => c.id === cat);
+                _gameId = catDef.games[0].id;
+                _variant = 'all'; _openMatch = null;
+                this._updateNav(root);
+                this._renderContent();
+            };
         });
-        matrixHTML += '</div>';
+        root.querySelectorAll('.stats-nav-game').forEach(btn => {
+            btn.onclick = () => {
+                const g = btn.dataset.game;
+                if (_gameId === g) return;
+                _gameId = g; _variant = 'all'; _openMatch = null;
+                this._updateNav(root);
+                this._renderContent();
+            };
+        });
+    },
 
-        container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent"><span class="hero-label">Avg Darts</span><span class="hero-val">${data.summary.avgDarts}</span></div>
-                <div class="hero-card"><span class="hero-label">Best Darts</span><span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestDarts}</span></div>
-                <div class="hero-card"><span class="hero-label">Hit Rate</span><span class="hero-val">${data.summary.hitRate}</span></div>
-                <div class="hero-card"><span class="hero-label">Spiele</span><span class="hero-val">${data.summary.games}</span></div>
-            </div>
-            
-            <h4 style="margin-bottom:10px; color:#c4c4c4; letter-spacing:1px; font-size:0.8rem; text-transform:uppercase;">Darts Ø pro Target</h4>
-            ${matrixHTML}
+    _updateNav(root) {
+        root.querySelectorAll('.stats-nav-cat').forEach(el => {
+            const active = el.dataset.cat === _catId;
+            el.classList.toggle('open', active);
+            el.querySelector('.stats-nav-cat-btn').classList.toggle('active', active);
+        });
+        root.querySelectorAll('.stats-nav-game').forEach(el => {
+            el.classList.toggle('active', el.dataset.game === _gameId);
+        });
+    },
 
-            <div class="chart-wrapper-big" style="background: rgba(255,255,255,0.03); border: 1px solid #333; border-radius: 12px; padding: 15px; margin-bottom:20px; height: 250px;">
-                <canvas id="mainTrendChart"></canvas>
-            </div>
+    // ─── CONTENT ─────────────────────────────────────────────────────────────
 
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">
-                    ${this._generateAtcMatchListHTML(data.matches)}
-                </div>
-            </div>
+    _renderContent() {
+        const area = document.getElementById('st-content');
+        if (!area) return;
+
+        // Destroy existing chart BEFORE replacing DOM — Chart.js needs the canvas in the DOM to clean up
+        if (window._statsChart) { window._statsChart.destroy(); window._statsChart = null; }
+
+        const variants = VARIANTS[_gameId] || null;
+        const variantBar = variants ? `
+            <div class="stats-variant-bar">
+                ${variants.map(v => `
+                    <button class="stats-variant-btn ${v.v === _variant ? 'active':''}" data-v="${v.v}">${v.l}</button>
+                `).join('')}
+            </div>` : '';
+
+        const data = this._loadData();
+        if (!data) {
+            area.innerHTML = variantBar + this._emptyHTML();
+            this._bindVariantBar(area);
+            return;
+        }
+
+        const renderer = this._getRenderer(_gameId);
+        const bodyHTML = renderer ? renderer.call(this, data) : this._emptyHTML('Kein Renderer.');
+
+        area.innerHTML = variantBar + bodyHTML;
+        this._bindVariantBar(area);
+        this._bindMatchExpand(area);
+        setTimeout(() => this._renderCharts(data, area), 0);
+    },
+
+    _bindVariantBar(area) {
+        area.querySelectorAll('.stats-variant-btn').forEach(btn => {
+            btn.onclick = () => { _variant = btn.dataset.v; _openMatch = null; this._renderContent(); };
+        });
+    },
+
+    _bindMatchExpand(area) {
+        area.querySelectorAll('.match-row-header').forEach(row => {
+            row.onclick = () => {
+                const id = row.dataset.matchid;
+                _openMatch = (_openMatch === id) ? null : id;
+                const body = area.querySelector(`.match-row-body[data-matchid="${id}"]`);
+                if (body) body.classList.toggle('open', _openMatch === id);
+                row.querySelector('.match-chevron')?.classList.toggle('rotated', _openMatch === id);
+            };
+        });
+    },
+
+    _loadData() {
+        switch (_gameId) {
+            case 'x01':                return StatsService.getX01Stats(_playerId, _days, _variant);
+            case 'cricket':            return StatsService.getCricketStats(_playerId, _days, _variant);
+            case 'single-training':    return StatsService.getSingleTrainingStats(_playerId, _days);
+            case 'around-the-board':   return StatsService.getAtcStats(_playerId, _days, _variant);
+            case 'shanghai':           return StatsService.getShanghaiStats(_playerId, _days, _variant);
+            case 'bobs27':             return StatsService.getBobs27Stats(_playerId, _days);
+            case 'halve-it':           return StatsService.getHalveItStats(_playerId, _days);
+            case 'scoring-drill':      return StatsService.getScoringDrillStats(_playerId, _days, _variant);
+            case 'checkout-challenge': return StatsService.getCheckoutChallengeStats(_playerId, _days);
+            default: return null;
+        }
+    },
+
+    _getRenderer(gameId) {
+        return {
+            'x01':               this._renderX01,
+            'cricket':           this._renderCricket,
+            'single-training':   this._renderSingleTraining,
+            'around-the-board':  this._renderAtb,
+            'shanghai':          this._renderShanghai,
+            'bobs27':            this._renderBobs27,
+            'halve-it':          this._renderHalveIt,
+            'scoring-drill':     this._renderScoringDrill,
+            'checkout-challenge':this._renderCheckoutChallenge,
+        }[gameId] || null;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SPIEL-RENDERER
+    // ═══════════════════════════════════════════════════════════════════════
+
+    _renderX01(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Average',   val:s.lifetimeAvg, accent:true },
+                { label:'Best Avg',    val:s.bestAvg },
+                { label:'Höchster Check', val:s.highestCheckout },
+                { label:'Best Leg',    val:s.bestLeg },
+                { label:'180s',        val:s.total180s, gold:true },
+                { label:'140+',        val:s.total140s },
+                { label:'100+',        val:s.total100s },
+                { label:'Spiele',      val:s.games },
+            ])}
+            ${this._dualChartSection('Ø Average', 'First 9')}
+            ${this._matchHistory(data.matches, this._x01MatchRow.bind(this))}
         `;
-        
-        setTimeout(() => {
-            this.renderTrendChart({
-                labels: data.chart.labels,
-                values: data.chart.values 
-            }, "Darts Total");
-        }, 0);
     },
 
-    _generateAtcMatchListHTML: function(matches) {
-        return matches.map(m => `
-            <div class="history-item-complex" style="background: rgba(255,255,255,0.02); border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 10px; display: grid; grid-template-columns: 80px 1.2fr 1fr 1fr 1fr; align-items: center; gap: 10px; font-size: 0.85rem;">
-                <div style="font-size: 0.75rem; color: #666;">${m.date}</div>
-                
-                <div>
-                    <div style="font-weight:bold; color:#fff;">${m.variant}</div>
-                    <div style="font-size:0.75rem; color:#888;">${m.opponents}</div>
-                </div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:${m.resultClass === 'res-win' ? 'var(--accent-color)' : '#fff'};">${m.darts}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Darts</small>
-                </div>
-
-                <div style="text-align: right;">
-                    <strong style="font-size:1.1rem; color:var(--highlight-color);">${m.hitRate}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Quote</small>
-                </div>
-            </div>
-        `).join('');
-    },
-	
-    renderDashboardCricket: function(container, data) {
-        container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent"><span class="hero-label">Avg MPR</span><span class="hero-val">${data.summary.avgMPR}</span></div>
-                <div class="hero-card"><span class="hero-label">Best MPR</span><span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestMPR}</span></div>
-                <div class="hero-card"><span class="hero-label">Total Marks</span><span class="hero-val">${data.summary.totalMarks}</span></div>
-                <div class="hero-card"><span class="hero-label">Spiele</span><span class="hero-val">${data.summary.games}</span></div>
-            </div>
-            <div class="grid-triple-result">
-                <div class="chart-wrapper-big"><canvas id="mainTrendChart"></canvas></div>
-                <div class="heatmap-container" id="stats-heatmap-box">
-                    <h4 style="color:#c4c4c4; margin-bottom:15px; letter-spacing:1px; font-size:0.8rem;">CRICKET HEATMAP</h4>
-                    ${StatsBoard.generateSVG(300)}
-                </div>
-                <div class="score-distribution">
-                    <h4 style="margin-bottom:20px; letter-spacing:1px; color:#c4c4c4;">VERTEILUNG</h4>
-                    <div class="dist-bar"><span>Singles</span> <strong>${data.distribution.singles}</strong></div>
-                    <div class="dist-bar"><span>Doubles</span> <strong>${data.distribution.doubles}</strong></div>
-                    <div class="dist-bar gold"><span>Triples</span> <strong>${data.distribution.triples}</strong></div>
-                </div>
-            </div>
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">${this._generateCricketMatchListHTML(data.matches)}</div>
-            </div>
+    _renderCricket(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø MPR',       val:s.avgMPR,    accent:true },
+                { label:'Best MPR',    val:s.bestMPR },
+                { label:'Total Marks', val:s.totalMarks },
+                { label:'Spiele',      val:s.games },
+            ])}
+            ${this._singleChartSection('MPR Verlauf')}
+            ${this._matchHistory(data.matches, this._cricketMatchRow.bind(this))}
         `;
-        setTimeout(() => { this.renderTrendChart({ labels: data.chart.labels, values: data.chart.values }, "MPR Verlauf"); this.applyHeatmapData(data.heatmap, 'stats-heatmap-box'); }, 0);
     },
-	
-    _generateCricketMatchListHTML: function(matches) {
-        // Grid angepasst: 6 Spalten (Punkte eingefügt)
-        // 80px Date | 1.2fr Name | 0.8fr Score | 0.8fr MPR | 0.8fr Marks | 0.6fr Rounds
-        return matches.map(m => `
-            <div class="history-item-complex" style="background: rgba(255,255,255,0.02); border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 10px; display: grid; grid-template-columns: 80px 1.2fr 0.8fr 0.8fr 0.8fr 0.6fr; align-items: center; gap: 8px; font-size: 0.85rem;">
-                
-                <div style="font-size: 0.75rem; color: #666;">${m.date}</div>
-                
-                <div style="min-width:0;">
-                    <div class="${m.resultClass}" style="font-size:0.9rem; margin-bottom:2px;">${m.resultLabel}</div>
-                    <div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${m.opponents}</div>
-                </div>
 
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:#fff;">${m.score}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Punkte</small>
-                </div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.2rem; color:var(--accent-color);">${m.mpr}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">MPR</small>
-                </div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:#fff;">${m.marks}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Marks</small>
-                </div>
-
-                <div style="text-align: right;">
-                    <strong style="font-size:1.1rem; color:#888;">${m.rounds}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Runden</small>
-                </div>
-            </div>
-        `).join('');
-    },
-	
-    renderDashboardX01: function(container, data) {
-        // --- HIER: 'Best AVG' durch 'Best Leg' ersetzt ---
-        container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent">
-                    <span class="hero-label">Period AVG</span>
-                    <span class="hero-val">${data.summary.lifetimeAvg}</span>
-                </div>
-                <div class="hero-card">
-                    <span class="hero-label">Best Leg</span>
-                    <span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestLeg}</span>
-                </div>
-                <div class="hero-card">
-                    <span class="hero-label">Best Match AVG</span>
-                    <span class="hero-val">${data.summary.bestAvg}</span>
-                </div>
-                <div class="hero-card">
-                    <span class="hero-label">High Finish</span>
-                    <span class="hero-val">${data.summary.highestCheckout}</span>
-                </div>
-            </div>
-            
-            <div class="grid-x01-layout">
-                <div class="chart-wrapper-big" style="background: rgba(255,255,255,0.03); border: 1px solid #333; border-radius: 12px; padding: 15px; height: 100%;">
-                    <canvas id="mainTrendChart"></canvas>
-                </div>
-                <div class="heatmap-container" id="stats-heatmap-box" style="margin:0; height: 100%;">
-                    <h4 style="color:#c4c4c4; margin-bottom:15px; letter-spacing:1px; font-size:0.8rem;">X01 HEATMAP</h4>
-                    ${StatsBoard.generateSVG(280)} 
-                </div>
-                <div class="score-distribution" style="margin:0; height: 100%;">
-                    <h4 style="margin-bottom:20px; letter-spacing:1px; color:#c4c4c4;">SCORES</h4>
-                    <div class="dist-bar"><span style="font-size:0.8rem;">100+</span> <strong>${data.summary.total100s}</strong></div>
-                    <div class="dist-bar"><span style="font-size:0.8rem;">140+</span> <strong>${data.summary.total140s}</strong></div>
-                    <div class="dist-bar gold" style="margin-top:15px;"><span style="font-size:0.9rem;">180</span> <strong style="font-size:1.4rem;">${data.summary.total180s}</strong></div>
-                </div>
-            </div>
-
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">${this._generateX01MatchListHTML(data.matches)}</div>
-            </div>
+    _renderSingleTraining(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',    val:s.avgScore,  accent:true },
+                { label:'Best Score', val:s.bestScore, gold:true },
+                { label:'Trefferquote', val:s.hitRate },
+                { label:'Spiele',     val:s.games },
+            ])}
+            ${this._distAndChart()}
+            ${this._matchHistory(data.matches, this._trainingMatchRow.bind(this))}
         `;
-        setTimeout(() => { this.renderTrendChart(data.charts, "AVG Trend"); this.applyHeatmapData(data.heatmap, 'stats-heatmap-box'); }, 0);
     },
-	
-    _generateX01MatchListHTML: function(matches) {
-        // --- ÄNDERUNG: NEUE SPALTE "LD" (Leg Darts) ---
-        // Grid angepasst: 7 Spalten
-        return matches.map(m => `
-            <div class="history-item-complex" style="background: rgba(255,255,255,0.02); border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 10px; display: grid; grid-template-columns: 80px 1.2fr 0.7fr 0.9fr 0.7fr 0.9fr 1.6fr; align-items: center; gap: 6px; font-size: 0.85rem;">
-                
-                <div style="font-size: 0.75rem; color: #666;">${m.date}</div>
-                
-                <div style="min-width:0;">
-                    <div class="${m.resultClass}" style="font-size:0.9rem; margin-bottom:2px;">${m.resultLabel}</div>
-                    <div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${m.opponents}</div>
-                </div>
 
-                <div style="text-align:center;"><span style="background:#222; padding:2px 4px; border-radius:4px; color:#aaa; font-size:0.7rem;">${m.mode}</span></div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:#fff;">${m.avg}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Ø</small>
-                </div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:#fff;">${m.bestLeg}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">LD</small>
-                </div>
-
-                <div style="text-align: center;">
-                    <strong style="font-size:1.1rem; color:var(--highlight-color);">${m.checkout}</strong>
-                    <small style="display:block; color:#555; font-size:0.6rem;">Check</small>
-                </div>
-
-                <div style="display:flex; justify-content:flex-end; align-items:center; gap:5px;">
-                    <div style="display:flex; flex-direction:column; align-items:center; line-height:1;"><span style="font-size:0.8rem; font-weight:bold; color:#fff;">${m.p100}</span><span style="font-size:0.6rem; color:#666;">100</span></div>
-                    <div style="width:1px; height:15px; background:#444;"></div>
-                    <div style="display:flex; flex-direction:column; align-items:center; line-height:1;"><span style="font-size:0.8rem; font-weight:bold; color:#fff;">${m.p140}</span><span style="font-size:0.6rem; color:#666;">140</span></div>
-                    <div style="width:1px; height:15px; background:#444;"></div>
-                    <div style="display:flex; flex-direction:column; align-items:center; line-height:1;"><span style="font-size:0.8rem; font-weight:bold; color:#eab308;">${m.p180}</span><span style="font-size:0.6rem; color:#eab308;">180</span></div>
-                </div>
-            </div>
-        `).join('');
-    },
-	
-    renderDashboardTraining: function(container, data) {
-         container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent"><span class="hero-label">Avg Score</span><span class="hero-val">${data.summary.avgScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Best Score</span><span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Trefferquote</span><span class="hero-val">${data.summary.hitRate}</span></div>
-                <div class="hero-card"><span class="hero-label">Spiele</span><span class="hero-val">${data.summary.games}</span></div>
-            </div>
-            <div class="grid-triple-result">
-                <div class="chart-wrapper-big"><canvas id="mainTrendChart"></canvas></div>
-                <div class="heatmap-container" id="stats-heatmap-box">
-                    <h4 style="color:#c4c4c4; margin-bottom:15px; letter-spacing:1px; font-size:0.8rem;">GESAMT HEATMAP</h4>
-                    ${StatsBoard.generateSVG(300)}
-                </div>
-                <div class="score-distribution">
-                    <h4 style="margin-bottom:20px; letter-spacing:1px; color:#c4c4c4;">VERTEILUNG</h4>
-                    <div class="dist-bar"><span>Singles</span> <strong>${data.distribution.singles}</strong></div>
-                    <div class="dist-bar"><span>Doubles</span> <strong>${data.distribution.doubles}</strong></div>
-                    <div class="dist-bar gold"><span>Triples</span> <strong>${data.distribution.triples}</strong></div>
-                </div>
-            </div>
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">${this._generateTrainingMatchListHTML(data.matches)}</div>
-            </div>
+    _renderAtb(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Darts',    val:s.avgDarts,  accent:true },
+                { label:'Best Darts', val:s.bestDarts, gold:true },
+                { label:'Trefferquote', val:s.hitRate },
+                { label:'Spiele',     val:s.games },
+            ])}
+            ${this._atbMatrixAndChart(data)}
+            ${this._matchHistory(data.matches, this._atbMatchRow.bind(this))}
         `;
-        setTimeout(() => { this.renderTrendChart(data.chart, "Score Verlauf"); this.applyHeatmapData(data.heatmap, 'stats-heatmap-box'); }, 0);
     },
-    renderDashboardShanghai: function(container, data) {
-        container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent"><span class="hero-label">Avg Score</span><span class="hero-val">${data.summary.avgScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Best Score</span><span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Trefferquote</span><span class="hero-val">${data.summary.hitRate}</span></div>
-                <div class="hero-card"><span class="hero-label">Spiele</span><span class="hero-val">${data.summary.games}</span></div>
-            </div>
-            <div class="grid-triple-result">
-                <div class="chart-wrapper-big"><canvas id="mainTrendChart"></canvas></div>
-                <div class="heatmap-container" id="stats-heatmap-box">
-                    <h4 style="color:#c4c4c4; margin-bottom:15px; letter-spacing:1px; font-size:0.8rem;">SHANGHAI HEATMAP</h4>
-                    ${StatsBoard.generateSVG(300)}
-                </div>
-                <div class="score-distribution">
-                    <h4 style="margin-bottom:20px; letter-spacing:1px; color:#c4c4c4;">VERTEILUNG</h4>
-                    <div class="dist-bar"><span>Singles</span> <strong>${data.distribution.singles}</strong></div>
-                    <div class="dist-bar"><span>Doubles</span> <strong>${data.distribution.doubles}</strong></div>
-                    <div class="dist-bar gold"><span>Triples</span> <strong>${data.distribution.triples}</strong></div>
-                </div>
-            </div>
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">${this._generateTrainingMatchListHTML(data.matches)}</div>
-            </div>
+
+    _renderShanghai(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',    val:s.avgScore,  accent:true },
+                { label:'Best Score', val:s.bestScore, gold:true },
+                { label:'Trefferquote', val:s.hitRate },
+                { label:'Spiele',     val:s.games },
+            ])}
+            ${this._distAndChart()}
+            ${this._matchHistory(data.matches, this._trainingMatchRow.bind(this))}
         `;
-        setTimeout(() => { this.renderTrendChart(data.chart, "Score Verlauf"); this.applyHeatmapData(data.heatmap, 'stats-heatmap-box'); }, 0);
     },
-    renderDashboardBobs27: function(container, data) {
-        container.innerHTML = `
-            <div class="stats-hero-grid" style="padding: 0 5px; margin-bottom: 20px;">
-                <div class="hero-card accent"><span class="hero-label">Avg Score</span><span class="hero-val">${data.summary.avgScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Best Score</span><span class="hero-val" style="color:var(--highlight-color);">${data.summary.bestScore}</span></div>
-                <div class="hero-card"><span class="hero-label">Survival Rate</span><span class="hero-val">${data.summary.survivalRate}</span></div>
-                <div class="hero-card"><span class="hero-label">Hit Rate</span><span class="hero-val">${data.summary.hitRate}</span></div>
-            </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
-                <div class="chart-wrapper-big" style="background: rgba(255,255,255,0.03); border: 1px solid #333; border-radius: 12px; padding: 15px; height: 350px;">
-                    <canvas id="mainTrendChart"></canvas>
-                </div>
-                <div class="heatmap-container" id="stats-heatmap-box" style="margin:0; height: 350px; background: rgba(255,255,255,0.03); border: 1px solid #333; border-radius: 12px; display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%;">
-                    <h4 style="color:#c4c4c4; margin-bottom:15px; letter-spacing:1px; font-size:0.8rem; text-align:center;">DOUBLES HEATMAP</h4>
-                    ${StatsBoard.generateSVG(280)}
-                </div>
-            </div>
-            <div class="stats-history-scroll-area" style="margin-top: 20px; padding: 20px;">
-                <h4 style="margin-bottom:15px; color:#888; text-transform:uppercase; font-size:0.9rem;">Match Historie</h4>
-                <div id="stats-match-list-container">${this._generateBobsMatchListHTML(data.matches)}</div>
-            </div>
+
+    _renderBobs27(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',     val:s.avgScore,     accent:true },
+                { label:'Best Score',  val:s.bestScore,    gold:true },
+                { label:'Survival',    val:s.survivalRate },
+                { label:'Double-Rate', val:s.hitRate },
+                { label:'Spiele',      val:s.games },
+            ])}
+            ${this._singleChartSection('Score Verlauf')}
+            ${this._matchHistory(data.matches, this._bobs27MatchRow.bind(this))}
         `;
-        setTimeout(() => { this.renderTrendChart({ labels: data.chart.labels, avgTrend: data.chart.values }, "Score Verlauf"); this.applyHeatmapData(data.heatmap, 'stats-heatmap-box'); }, 0);
     },
-    _generateTrainingMatchListHTML: function(matches) {
-        return matches.map(m => `
-            <div class="history-item-complex" style="background: rgba(255,255,255,0.02); border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 10px; display: grid; grid-template-columns: 90px 1.5fr 0.8fr 0.8fr 2.2fr; align-items: center; gap: 10px; font-size: 0.85rem;">
-                <div style="font-size: 0.75rem; color: #666;">${m.date}</div>
-                <div><div class="${m.resultClass}" style="font-size:0.9rem; margin-bottom:2px;">${m.resultLabel}</div><div style="font-size:0.75rem; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${m.opponents}</div></div>
-                <div style="text-align: center;"><strong style="font-size:1.2rem; color:#fff;">${m.score}</strong><small style="display:block; color:#555; font-size:0.6rem;">Punkte</small></div>
-                <div style="text-align: center;"><strong style="font-size:1.2rem; color:var(--highlight-color);">${m.hitRate}</strong><small style="display:block; color:#555; font-size:0.6rem;">Quote</small></div>
-                <div style="display:flex; justify-content:flex-end; align-items:center; gap:10px;">
-                    <div style="display:flex; align-items:center; gap:4px;"><span style="color:#666; font-size:0.8rem; font-weight:bold;">S:</span><span class="badge-sdt bg-s">${m.s}</span></div>
-                    <div style="width:1px; height:20px; background:#444;"></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><span style="color:#666; font-size:0.8rem; font-weight:bold;">D:</span><span class="badge-sdt bg-d">${m.d}</span></div>
-                    <div style="width:1px; height:20px; background:#444;"></div>
-                    <div style="display:flex; align-items:center; gap:4px;"><span style="color:#666; font-size:0.8rem; font-weight:bold;">T:</span><span class="badge-sdt bg-t">${m.t}</span></div>
+
+    _renderHalveIt(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',        val:s.avgScore,      accent:true },
+                { label:'Best Score',     val:s.bestScore,     gold:true },
+                { label:'Halbierungsrate',val:s.halvingRate },
+                { label:'Perfect Rounds', val:s.perfectRounds },
+                { label:'Spiele',         val:s.games },
+            ])}
+            ${this._singleChartSection('Score Verlauf')}
+            ${this._matchHistory(data.matches, this._halveItMatchRow.bind(this))}
+        `;
+    },
+
+    _renderScoringDrill(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',    val:s.avgScore,  accent:true },
+                { label:'Best Score', val:s.bestScore, gold:true },
+                { label:'Ø Average',  val:s.avgAvg },
+                { label:'180s',       val:s.total180,  gold:true },
+                { label:'140+',       val:s.total140 },
+                { label:'100+',       val:s.total100 },
+                { label:'Spiele',     val:s.games },
+            ])}
+            ${this._singleChartSection('Ø Average Verlauf')}
+            ${this._matchHistory(data.matches, this._drillMatchRow.bind(this))}
+        `;
+    },
+
+    _renderCheckoutChallenge(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Checkout-Rate', val:s.checkoutRate, accent:true },
+                { label:'Ø Darts/Check', val:s.avgDpc },
+                { label:'Best Score',    val:s.bestScore,    gold:true },
+                { label:'Ø Score',       val:s.avgScore },
+                { label:'Spiele',        val:s.games },
+            ])}
+            ${this._singleChartSection('Checkout-Rate %')}
+            ${this._matchHistory(data.matches, this._checkoutMatchRow.bind(this))}
+        `;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  BLOCK-BAUSTEINE
+    // ═══════════════════════════════════════════════════════════════════════
+
+    _heroGrid(items) {
+        return `<div class="stats-hero-grid">${items.map(item => `
+            <div class="hero-card ${item.accent?'accent':''}">
+                <span class="hero-label">${item.label}</span>
+                <span class="hero-val ${item.gold?'gold-val':''}">${item.val ?? '–'}</span>
+            </div>`).join('')}</div>`;
+    },
+
+    _dualChartSection(l1, l2) {
+        return `<div class="stats-chart-card">
+            <div class="stats-chart-header">
+                <span class="stats-chart-title">${l1} / ${l2}</span>
+                <div class="stats-chart-legend">
+                    <span class="legend-dot green"></span>${l1}
+                    <span class="legend-dot gold"></span>${l2}
                 </div>
             </div>
-        `).join('');
+            <div class="stats-chart-body"><canvas id="st-chart-trend"></canvas></div>
+        </div>`;
     },
-    _generateBobsMatchListHTML: function(matches) {
-        return matches.map(m => {
-            const targets = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,25];
-            let infoText = `${m.rounds} Runden`;
-            if (m.resultLabel === 'BUST') {
-                const bustIndex = m.rounds - 1;
-                if (bustIndex >= 0 && bustIndex < targets.length) {
-                    const t = targets[bustIndex];
-                    infoText = `Aus bei ${t === 25 ? 'BULL' : 'D'+t}`;
-                }
-            } else { infoText = `${m.doublesHit} Treffer`; }
-            return `
-            <div class="history-item-complex" style="background: rgba(255,255,255,0.02); border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 10px; display: grid; grid-template-columns: 80px 1.2fr 1.2fr 1fr 1fr; align-items: center; gap: 10px; font-size: 0.85rem;">
-                <div style="font-size: 0.75rem; color: #666;">${m.date}</div>
-                <div class="${m.resultClass}" style="font-size:0.9rem; font-weight:bold;">${m.resultLabel}</div>
-                <div style="font-size:0.8rem; color:#aaa;">${infoText}</div>
-                <div style="text-align: center;"><strong style="font-size:1.1rem; color:${m.score >= 0 ? '#fff' : 'var(--miss-color)'};">${m.score}</strong><small style="display:block; color:#555; font-size:0.6rem;">Punkte</small></div>
-                <div style="text-align: right;"><strong style="font-size:1.1rem; color:var(--highlight-color);">${m.hitRate}</strong><small style="display:block; color:#555; font-size:0.6rem;">Quote</small></div>
+
+    _singleChartSection(label) {
+        return `<div class="stats-chart-card">
+            <div class="stats-chart-header"><span class="stats-chart-title">${label}</span></div>
+            <div class="stats-chart-body"><canvas id="st-chart-trend"></canvas></div>
+        </div>`;
+    },
+
+    _distAndChart(data) {
+        const d = (data && data.distribution) ? data.distribution : {};
+        return `<div class="stats-mid-grid">
+            <div class="stats-chart-card stats-mid-chart">
+                <div class="stats-chart-header"><span class="stats-chart-title">Score Verlauf</span></div>
+                <div class="stats-chart-body"><canvas id="st-chart-trend"></canvas></div>
             </div>
-        `}).join('');
+            <div class="stats-dist-card">
+                <h5 class="stats-dist-title">VERTEILUNG</h5>
+                <div class="dist-bar"><span>Singles</span><strong>${d.singles ?? 0}</strong></div>
+                <div class="dist-bar"><span>Doubles</span><strong>${d.doubles ?? 0}</strong></div>
+                <div class="dist-bar gold"><span>Triples</span><strong>${d.triples ?? 0}</strong></div>
+            </div>
+        </div>`;
     },
-	applyHeatmapData: function(heatmapData, containerId) {
-		if (!heatmapData) return;
-		const values = Object.values(heatmapData);
-		if(values.length === 0) return;
-		const maxHits = Math.max(...values);
-        const container = document.getElementById(containerId);
-        if(!container) return;
-		Object.entries(heatmapData).forEach(([segId, hits]) => {
-			let elementId = `seg-${segId}`;
-			let elements = [];
-			if (segId.startsWith('S')) {
-				const elO = container.querySelector(`#${elementId}-O`);
-				const elI = container.querySelector(`#${elementId}-I`);
-				if(elO) elements.push(elO); if(elI) elements.push(elI);
-			} else {
-				const el = container.querySelector(`#${elementId}`);
-				if(el) elements.push(el);
-			}
-			const intensity = hits / maxHits;
-			let heatClass = '';
-			if (intensity > 0.7) heatClass = 'heat-high';
-			else if (intensity > 0.3) heatClass = 'heat-medium';
-			else if (intensity > 0) heatClass = 'heat-low';
-			elements.forEach(el => {
-                el.classList.remove('heat-low', 'heat-medium', 'heat-high');
-				if (el) el.classList.add(heatClass);
-			});
-		});
-	},
-    renderTrendChart: function(chartData, label) {
-        const canvas = document.getElementById('mainTrendChart');
-        if(!canvas) return;
+
+    _atbMatrixAndChart(data) {
+        const matrix = data.matrix || [];
+        return `<div class="stats-mid-grid">
+            <div class="stats-chart-card stats-mid-chart">
+                <div class="stats-chart-header"><span class="stats-chart-title">Darts pro Session</span></div>
+                <div class="stats-chart-body"><canvas id="st-chart-trend"></canvas></div>
+            </div>
+            <div class="stats-dist-card">
+                <h5 class="stats-dist-title">Ø DARTS PRO FELD</h5>
+                <div class="atb-matrix">
+                    ${matrix.map(m => `
+                        <div class="atb-cell ${m.heatClass}">
+                            <span class="atb-label">${m.label}</span>
+                            <span class="atb-val">${m.val}</span>
+                        </div>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    },
+
+    _matchHistory(matches, rowFn) {
+        if (!matches || matches.length === 0) {
+            return `<div class="stats-hist-empty">Noch keine Einträge im gewählten Zeitraum.</div>`;
+        }
+        const gameClass = `mh-${_gameId}`;
+        return `
+            <div class="stats-history-card">
+                <h4 class="stats-history-title">Match-Historie <span class="mh-count">${matches.length}</span></h4>
+                <div class="stats-history-list">
+                    ${matches.map((m, i) => {
+                        const mid = `match-${i}`;
+                        const breakdown = this._roundBreakdownHTML(m);
+                        return `
+                            <div class="match-row">
+                                <div class="match-row-header ${breakdown ? 'expandable':''}" data-matchid="${mid}">
+                                    <div class="match-row-inner ${gameClass}">${rowFn(m)}</div>
+                                    ${breakdown ? `<span class="match-chevron">▾</span>` : ''}
+                                </div>
+                                ${breakdown ? `
+                                    <div class="match-row-body ${_openMatch===mid?'open':''}" data-matchid="${mid}">
+                                        ${breakdown}
+                                    </div>` : ''}
+                            </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+    },
+
+    _roundBreakdownHTML(m) {
+        if (!m.roundBreakdown || m.roundBreakdown.length === 0) return null;
+        return `<div class="breakdown-table">
+            ${m.roundBreakdown.map(r => {
+                const dartsStr = (r.darts || [])
+                    .map(d => d.isMiss ? '<span class="bd-miss">✗</span>' : `<span class="bd-hit">${d.segment || d.points || '?'}</span>`)
+                    .join(' ');
+                const targetLabel = r.target !== undefined ? `<span class="bd-target-val">${r.target}</span>` : '';
+                const hitLabel    = r.hit !== undefined ? (r.hit ? '✅' : '❌') : '';
+                const halvLabel   = r.wasHalved ? ' <span class="bd-halved">halved</span>' : '';
+                const scoreStr    = r.score !== undefined ? `+${r.score}` : '';
+                const totalStr    = r.totalAfter !== undefined ? `= ${r.totalAfter}` : '';
+                return `
+                    <div class="breakdown-row">
+                        <span class="bd-idx">#${r.idx}</span>
+                        <span class="bd-target">${targetLabel}${hitLabel}</span>
+                        <span class="bd-darts">${dartsStr || '—'}</span>
+                        <span class="bd-score">${scoreStr}${halvLabel}</span>
+                        <span class="bd-total">${totalStr}</span>
+                    </div>`;
+            }).join('')}
+        </div>`;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  MATCH-ROW TEMPLATES
+    // ═══════════════════════════════════════════════════════════════════════
+
+    _x01MatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge mh-mode">${m.mode}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.avg}<small>avg</small></span>
+        <span class="mh-kpi">${m.checkout}<small>check</small></span>
+        <span class="mh-kpi">${m.bestLeg}<small>leg</small></span>
+        <span class="mh-powers">
+            <span class="mh-power">${m.p100}<small>100</small></span>
+            <span class="mh-power">${m.p140}<small>140</small></span>
+            <span class="mh-power gold">${m.p180}<small>180</small></span>
+        </span>`,
+
+    _cricketMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.mpr}<small>MPR</small></span>
+        <span class="mh-kpi">${m.marks}<small>marks</small></span>
+        <span class="mh-kpi">${m.rounds}<small>runden</small></span>`,
+
+    _trainingMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>
+        <span class="mh-kpi">${m.hitRate}<small>quote</small></span>
+        <span class="mh-sdt">S<strong>${m.s}</strong> D<strong>${m.d}</strong> T<strong>${m.t}</strong></span>`,
+
+    _atbMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.darts}<small>darts</small></span>
+        <span class="mh-kpi">${m.hitRate}<small>quote</small></span>
+        <span class="mh-badge mh-mode">${m.variant}</span>`,
+
+    _bobs27MatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-kpi" style="color:${m.score >= 0 ? '#fff':'var(--miss-color)'}">
+            ${m.score}<small>pts</small>
+        </span>
+        <span class="mh-kpi">${m.hitRate}<small>double-rate</small></span>
+        <span class="mh-kpi">${m.rounds}<small>runden</small></span>`,
+
+    _halveItMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge mh-mode">${m.mode}</span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>
+        <span class="mh-kpi">${m.halvingRate}<small>halbiert</small></span>
+        <span class="mh-kpi">${m.halvings}<small>halvings</small></span>
+        <span class="mh-kpi">${m.perfect}<small>perfect</small></span>`,
+
+    _drillMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge mh-mode">${m.limit} darts</span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>
+        <span class="mh-kpi">${m.avg}<small>avg</small></span>
+        <span class="mh-powers">
+            <span class="mh-power">${m.ton}<small>100</small></span>
+            <span class="mh-power">${m.ton40}<small>140</small></span>
+            <span class="mh-power gold">${m.max}<small>180</small></span>
+        </span>`,
+
+    _checkoutMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge mh-mode">${m.difficulty}</span>
+        <span class="mh-kpi">${m.checkoutRate}<small>rate</small></span>
+        <span class="mh-kpi">${m.hit}/${m.total}<small>checks</small></span>
+        <span class="mh-kpi">${m.avgDpc}<small>darts/check</small></span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>`,
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  CHARTS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    _renderCharts(data, area) {
+        const canvas = area.querySelector('#st-chart-trend');
+        if (!canvas) return;
+        if (window._statsChart) { window._statsChart.destroy(); window._statsChart = null; }
+
         const ctx = canvas.getContext('2d');
-        if (window.statsChartInstance) window.statsChartInstance.destroy();
-        
-        let datasets = [];
-        if (chartData.avgTrend) {
+        let datasets = [], labels = [];
+
+        if (_gameId === 'x01' && data.charts) {
+            labels = data.charts.labels || [];
             datasets = [
-                { label: 'AVG', data: chartData.avgTrend, borderColor: '#00d26a', backgroundColor: 'rgba(0, 210, 106, 0.1)', fill: true, tension: 0.4 },
-                { label: 'First 9', data: chartData.f9Trend, borderColor: '#eab308', borderDash: [5, 5], tension: 0.4 }
+                { label:'Ø Average', data: data.charts.avgTrend || [],
+                  borderColor:'#00d26a', backgroundColor:'rgba(0,210,106,0.1)',
+                  fill:true, tension:0.4, type:'line' },
+                { label:'First 9',   data: data.charts.f9Trend || [],
+                  borderColor:'#eab308', borderDash:[5,5], tension:0.4,
+                  type:'line', pointRadius:0 },
             ];
-        } else {
+        } else if (data.chart) {
+            labels = data.chart.labels || [];
+            const vals = data.chart.values || [];
+            const trend = vals.map((_, i) => {
+                const w = vals.slice(Math.max(0, i-6), i+1);
+                return +(w.reduce((a,b)=>a+b,0) / w.length).toFixed(2);
+            });
             datasets = [
-                { label: 'Werte', data: chartData.values, borderColor: '#00d26a', backgroundColor: 'rgba(0, 210, 106, 0.1)', fill: true, tension: 0.3 }
+                { label:'Einzelwert', data:vals,
+                  backgroundColor:'rgba(99,102,241,0.45)', borderColor:'rgba(99,102,241,0.8)',
+                  type:'bar', order:2 },
+                { label:'Ø Trend',    data:trend,
+                  borderColor:'#00d26a', backgroundColor:'transparent',
+                  type:'line', tension:0.4, pointRadius:0, order:1 },
             ];
         }
 
-        window.statsChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: { labels: chartData.labels, datasets: datasets },
-            options: { 
+        if (!datasets.length || !labels.length) return;
+
+        // Calculate a sensible Y-axis minimum with 10% padding below the minimum value
+        const allValues = datasets.flatMap(ds => (ds.data || []).filter(v => typeof v === 'number' && !isNaN(v)));
+        const minVal = allValues.length ? Math.min(...allValues) : 0;
+        const yMin = minVal > 0 ? minVal * 0.9 : minVal;
+
+        window._statsChart = new Chart(ctx, {
+            data: { labels, datasets },
+            options: {
                 responsive: true, maintainAspectRatio: false,
+                interaction: { mode:'index', intersect:false },
                 scales: {
-                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' }, beginAtZero: true },
-                    x: { grid: { display: false }, ticks: { color: '#888', maxTicksLimit: 10 } }
+                    y: {
+                        beginAtZero: false,
+                        suggestedMin: yMin,
+                        grid:{ color:'rgba(255,255,255,0.05)' },
+                        ticks:{ color:'#888' }
+                    },
+                    x: { grid:{ display:false }, ticks:{ color:'#888', maxTicksLimit:12 } }
                 },
-                plugins: { legend: { labels: { color: '#fff' } } }
+                plugins: { legend:{ labels:{ color:'#bbb', boxWidth:12 } } }
             }
         });
-    }
+    },
+
+    // ─── Legacy heatmap (für externe Nutzung) ───────────────────────────────
+    applyHeatmapData(heatmapData, containerId) {
+        if (!heatmapData) return;
+        const values = Object.values(heatmapData);
+        if (!values.length) return;
+        const maxHits = Math.max(...values);
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        Object.entries(heatmapData).forEach(([segId, hits]) => {
+            const elId = `seg-${segId}`;
+            const elements = [];
+            if (segId.startsWith('S')) {
+                const o = container.querySelector(`#${elId}-O`);
+                const i2 = container.querySelector(`#${elId}-I`);
+                if (o) elements.push(o); if (i2) elements.push(i2);
+            } else {
+                const el = container.querySelector(`#${elId}`);
+                if (el) elements.push(el);
+            }
+            const intensity = hits / maxHits;
+            const cls = intensity > 0.7 ? 'heat-high' : intensity > 0.3 ? 'heat-medium' : 'heat-low';
+            elements.forEach(el => {
+                el.classList.remove('heat-low','heat-medium','heat-high');
+                el.classList.add(cls);
+            });
+        });
+    },
+
+    _emptyHTML(msg = 'Keine Daten für diese Auswahl.') {
+        return `<div class="stats-empty-state"><span>📭</span><p>${msg}</p></div>`;
+    },
 };
+
+function _esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+}

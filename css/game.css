@@ -55,22 +55,75 @@
 
 /* --- DART DISPLAY --- */
 .dart-display-row { 
-    display: flex; gap: var(--gap-sm); justify-content: center; 
-    margin-top: var(--gap-sm); height: 60px; width: 100%; margin-bottom: var(--gap-lg);
+    display: flex; gap: var(--gap-lg); justify-content: center; 
+    margin-top: var(--gap-sm); height: 68px; width: 100%; margin-bottom: var(--gap-lg);
 }
+
+/* ─── BASIS-BOX ─── */
 .dart-val-box { 
-    flex: 1; max-width: 80px; height: 60px;
-    background: var(--bg-input); border: 2px solid var(--border-default); border-radius: 10px; 
+    flex: 1;
+    height: 68px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
     display: flex; align-items: center; justify-content: center; 
-    font-weight: bold; font-size: 1.5rem; color: var(--gray-400);
-    box-shadow: inset var(--shadow-sm); transition: all 0.1s;
+    font-weight: 700; font-size: 1.6rem; color: var(--gray-400);
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
 }
+
+/* ─── LEERE BOX: Dart-Pfeil als Pseudo-Element ───
+   Nur sichtbar wenn NICHT .filled — also warten auf den Wurf.
+   Slim real-dart: Spitze rechts, Fahne links. Farbwert %23 = '#'.        */
+.dart-val-box:not(.filled)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 28'%3E%3C!-- Nadel --%3E%3Cline x1='78' y1='14' x2='108' y2='14' stroke='%23777' stroke-width='1.2' stroke-linecap='round'/%3E%3C!-- Fass (Barrel) --%3E%3Crect x='44' y='10' width='34' height='8' rx='4' fill='%23666'/%3E%3C!-- Schaft --%3E%3Crect x='20' y='13' width='24' height='2' rx='1' fill='%23555'/%3E%3C!-- Fahne --%3E%3Cpolygon points='20,14 3,6 0,14 3,22' fill='%23666'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 65% auto;
+    background-position: center;
+    opacity: 0.6;
+}
+
+/* Korrektur-Lücke: Pfeil trotzdem ausblenden, Hintergrund gelb */
+.dart-val-box.dart-corrected:not(.filled)::before { opacity: 0; }
+
+/* ─── GEFÜLLTE BOX: Zahl + Hintergrundton ─── */
 .dart-val-box.filled { 
-    background: var(--bg-card); border-color: var(--accent-color); 
-    color: var(--accent-color); box-shadow: var(--shadow-neon); 
+    background: rgba(255,255,255,0.07);
+    border-color: #444;
+    color: var(--text-main);
 }
-#screen-game .dart-val-box.is-miss { 
-    color: var(--miss-color); border-color: var(--miss-color); background: rgba(255, 77, 77, 0.1); 
+
+/* Treffer (grün) */
+#screen-game .dart-val-box.dart-hit {
+    background: rgba(0, 210, 106, 0.15);
+    border-color: rgba(0, 210, 106, 0.4);
+    color: var(--accent-color);
+}
+
+/* Verfehlt / Miss (rot) */
+#screen-game .dart-val-box.dart-miss,
+#screen-game .dart-val-box.is-miss {
+    background: rgba(255, 77, 77, 0.15);
+    border-color: rgba(255, 77, 77, 0.4);
+    color: var(--miss-color);
+}
+
+/* Korrektur-Slot (gelb) */
+#screen-game .dart-val-box.dart-corrected {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #f59e0b;
+    animation: dart-corrected-pulse 0.4s ease-out;
+}
+
+/* Gehalten (halb transparent) */
+#screen-game .dart-val-box.dart-held {
+    opacity: 0.45;
 }
 
 /* --- KEYPADS --- */
@@ -123,7 +176,7 @@
 .active-mod.mod-triple { background: var(--mod-triple); }
 
 .num-grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.num-btn { height: 55px; color: black; background: #e0e0e0; font-size: 1.3rem; }
+.num-btn { height: 55px; color: black; background: #e0e0e0; font-size: 1.5rem; }
 .num-btn:nth-child(even) { background: #c0c0c0; }
 
 /* Modifiers auf Numbers anwenden */
@@ -135,30 +188,81 @@
 /* --- DESKTOP SPLIT SCREEN (>= 1024px) --- */
 @media (min-width: 1024px) {
     #screen-game.active {
-        display: grid !important; 
-        grid-template-columns: 1fr 1fr; 
-        grid-template-rows: auto auto; 
-        gap: 40px; 
-        align-items: stretch; justify-items: center; align-content: center;
-        /* max-width: 1400px; /* Synchronisiert mit base.css */
-        margin: 0 auto; height: 100%; 
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto 1fr;
+        gap: var(--gap-lg) var(--gap-xl); /* Horizontal: mehr Abstand zwischen Spalten */
+        align-items: stretch;
+        justify-items: stretch;
+        align-content: start;
+        margin: 0 auto;
+        height: 100%;
+        overflow: hidden;
+        padding: var(--gap-md) var(--gap-xl); /* Außenabstand zum Bildschirmrand */
+        width: 100%;
+        box-sizing: border-box;
     }
-    .game-header-area { 
-        grid-column: 1 / -1; grid-row: 1;
-        background: #252525; padding: 15px; border-radius: 15px; border: 1px solid var(--border-default); 
-        width: 100%; /* max-width: 800px;*/ display: flex; justify-content: space-around; align-items: center;
+    .game-header-area {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        background: #252525;
+        padding: 12px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-default);
+        width: 100%;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        flex-shrink: 0;
     }
-    .target-box { 
-        grid-column: 1; grid-row: 2; height: auto; min-height: 520px; 
-        justify-self: end; margin: 0;
+    /* Left column: Target box fills remaining height */
+    .target-box {
+        grid-column: 1;
+        grid-row: 2;
+        height: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: var(--gap-lg) var(--gap-md);
+        gap: 30px;
     }
-    .keypad-pro-grid, .keypad-grid { 
-        grid-column: 2; grid-row: 2; justify-self: start; margin-top: 0;
+    /* Right column: Keypad fills remaining height */
+    .keypad-pro-grid,
+    .keypad-grid {
+        grid-column: 2;
+        grid-row: 2;
+        margin: 0;
+        height: 100%;
+        min-height: 0;
     }
-    /* Pro Keypad Fix für volle Höhe */
-    .keypad-pro-grid { height: 100%; justify-content: space-between; min-height: 520px; }
-    .keypad-pro-grid .num-grid-container { flex: 1; margin: 10px 0; grid-template-rows: repeat(4, 1fr); }
-    .keypad-pro-grid .num-btn { height: 100%; }
+    /* Pro Keypad: distribute space evenly */
+    .keypad-pro-grid {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: var(--gap-sm);
+    }
+    .keypad-pro-grid .mod-btn { height: 52px; }
+    .keypad-pro-grid .num-grid-container {
+        flex: 1;
+        min-height: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 8px;
+    }
+    .keypad-pro-grid .num-btn { height: 100%; min-height: 48px; }
+    /* Training/ATB keypads */
+    .keypad-grid {
+        display: grid;
+        align-content: stretch;
+        gap: 8px;
+    }
+    .keypad-grid .key-btn { height: 100%; min-height: 48px; }
+    /* Dart display: compact on desktop but tall enough for dart shape */
+    .dart-display-row { height: 68px; margin-top: var(--gap-xs); margin-bottom: var(--gap-xs); }
+    /* Target value slightly smaller to fit */
+    .target-value { font-size: 12rem; }
 }
 
 /* =========================================
@@ -404,7 +508,7 @@
     background: var(--bg-panel);
     border: 2px solid var(--accent-glow);
     border-radius: 12px;
-	padding: 10px 30px;
+	padding: 30px 30px;
     display: flex;
     flex-direction: row;
     align-items: center;

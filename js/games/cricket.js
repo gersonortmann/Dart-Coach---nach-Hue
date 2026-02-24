@@ -53,6 +53,7 @@ export const Cricket = {
         }
 
         // Dart speichern: points wird mit Cricket-spezifischem Wert überschrieben
+        dart._isHit = !dart.isMiss && validTargets.includes(dart.base);
         session.tempDarts.push({ ...dart, points: pointsScored });
 
         // ============================================================

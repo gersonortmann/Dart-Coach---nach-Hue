@@ -171,19 +171,60 @@ export const State = {
                     .map(otherPlayer => otherPlayer.name);
 
                 let matchStats;
-				if (session.gameId === 'bobs27') {
+                if (session.gameId === 'bobs27') {
                     matchStats = {
-                        // WICHTIG: Nicht summieren! Der Endstand IST der Score.
-                        totalScore: p.currentResidual, 
-                        // Wer nicht eliminiert ist, hat gewonnen (Survived)
+                        totalScore: p.currentResidual,
                         isWinner: !p.isEliminated,
-                        // Wir speichern auch Hits für die Statistik (optional, falls wir es später brauchen)
                         totalHits: p.turns.reduce((acc, t) => acc + (t.hits || 0), 0)
                     };
                 }
-                else if (session.gameId === 'single-training' || session.gameId === 'shanghai') { // Shanghai ergänzt!
+                else if (session.gameId === 'single-training' || session.gameId === 'shanghai') {
                     matchStats = this._calculateSingleTrainingStats(p);
-                } else {
+                }
+                else if (session.gameId === 'halve-it') {
+                    const allThrows = p.turns.flatMap(t => t.darts || []);
+                    const totalRounds = p.turns.length;
+                    const halvings = p.halvedCount || 0;
+                    const halvingRate = totalRounds > 0
+                        ? ((halvings / totalRounds) * 100).toFixed(0) + '%' : '0%';
+                    matchStats = {
+                        totalScore: p.score, halvings, halvingRate,
+                        perfectRounds: p.perfectRounds || 0, totalRounds,
+                        totalDarts: allThrows.length,
+                        summary: { score: p.score, halvings, halvingRate, perfectRounds: p.perfectRounds || 0 }
+                    };
+                }
+                else if (session.gameId === 'scoring-drill') {
+                    const avg = p.dartsThrown > 0
+                        ? ((p.score / p.dartsThrown) * 3).toFixed(1) : '0.0';
+                    matchStats = {
+                        totalScore: p.score, avg, dartsThrown: p.dartsThrown,
+                        dartLimit: p.dartLimit || session.settings?.dartLimit || 99,
+                        powerScores: p.stats || { ton: 0, ton40: 0, max: 0 },
+                        summary: {
+                            score: p.score, avg,
+                            ton:  (p.stats || {}).ton   || 0,
+                            ton40:(p.stats || {}).ton40 || 0,
+                            max:  (p.stats || {}).max   || 0,
+                        }
+                    };
+                }
+                else if (session.gameId === 'checkout-challenge') {
+                    const totalTargets = session.targets?.length || 0;
+                    const checkoutsHit = p.checkoutsHit || 0;
+                    const checkoutRate = totalTargets > 0
+                        ? ((checkoutsHit / totalTargets) * 100).toFixed(0) + '%' : '0%';
+                    const allThrows = p.turns.flatMap(t => t.darts || []);
+                    const dartsThrown = allThrows.length;
+                    const avgDPC = checkoutsHit > 0 ? (dartsThrown / checkoutsHit).toFixed(1) : '-';
+                    matchStats = {
+                        totalScore: p.score, checkoutsHit, checkoutsTotal: totalTargets,
+                        checkoutRate, avgDartsPerCheckout: avgDPC, dartsThrown,
+                        summary: { score: p.score, checkoutsHit, checkoutsTotal: totalTargets,
+                                   checkoutRate, avgDartsPerCheckout: avgDPC }
+                    };
+                }
+                else {
                     matchStats = this.calculateMatchStats(p, session);
                 }
                 

@@ -8,7 +8,9 @@ import { Management } from './ui-mgmt.js';
 import { Game } from './ui-game.js';
 import { Keyboard } from './ui-keyboard.js';
 import { HueService } from '../core/hue-service.js';
-import { EventBus } from '../core/event-bus.js';        // ← NEU
+import { WledService } from '../core/wled-service.js';
+import { LightingCoordinator } from '../core/lighting-coordinator.js';
+import { EventBus } from '../core/event-bus.js';
 import { AutodartsService } from '../core/autodarts-service.js';
 
 const GAME_NAMES = {
@@ -468,105 +470,161 @@ export const UI = {
         }
     },
 	
-	initHueWidget: async function() {
+	/**
+     * ═══════════════════════════════════════════════════════════
+     *  LIGHTING WIDGET (Hue + WLED kombiniert)
+     * ═══════════════════════════════════════════════════════════
+     * 
+     * Das Widget im Header zeigt den Status beider Lichtsysteme.
+     * Aufbau: [💡●] [🌈●]
+     *   ● grün  = aktiv & verbunden
+     *   ● gelb  = aktiv, aber Verbindungsfehler
+     *   ● grau  = deaktiviert
+     * 
+     * Klick auf 💡 → Hue-Tab in Einstellungen
+     * Klick auf 🌈 → WLED-Tab in Einstellungen
+     */
+    initLightWidget: function() {
         const widget = document.getElementById('hue-status-widget');
-        const icon = document.getElementById('hue-icon');
-        const text = document.getElementById('hue-text');
+        if (!widget) return;
 
-        if (!widget) return; 
+        // Widget-Inhalt neu strukturieren für Dual-System
+        widget.innerHTML = `
+            <span id="light-hue-btn"  class="light-indicator" title="Hue Einstellungen">💡<span id="light-hue-dot"  class="light-dot"></span></span>
+            <span id="light-wled-btn" class="light-indicator" title="WLED Einstellungen">🌈<span id="light-wled-dot" class="light-dot"></span></span>
+        `;
+        widget.style.cursor = 'default';
+        widget.style.gap = '8px';
 
-        // Hilfsfunktion für die Optik
-        const updateVisuals = (isEnabled, isConnected) => {
-            if (!isEnabled) {
-                // AUSGESCHALTET
-                widget.classList.remove('hue-connected', 'hue-error');
-                widget.style.opacity = "0.5";
-                text.innerText = "Licht: Aus";
-                icon.style.filter = "grayscale(100%)";
-            } else if (isConnected) {
-                // AN & VERBUNDEN
-                widget.classList.add('hue-connected');
-                widget.classList.remove('hue-error');
-                widget.style.opacity = "1";
-                text.innerText = "Licht: An";
-                icon.style.filter = "none";
+        // Dot-Farben aktualisieren
+        const _update = () => {
+            const status = LightingCoordinator.getStatus();
+            _setDot(document.getElementById('light-hue-dot'),  status.hue);
+            _setDot(document.getElementById('light-wled-dot'), status.wled);
+        };
+
+        function _setDot(dotEl, info) {
+            if (!dotEl) return;
+            if (!info.enabled) {
+                dotEl.className = 'light-dot dot-off';
+                dotEl.title = `${info.label}: Aus`;
+            } else if (info.connected) {
+                dotEl.className = 'light-dot dot-on';
+                dotEl.title = `${info.label}: Verbunden`;
             } else {
-                // AN aber FEHLER/SUCHT
-                widget.classList.remove('hue-connected');
-                widget.classList.add('hue-error');
-                widget.style.opacity = "1";
-                text.innerText = "Verbinde...";
+                dotEl.className = 'light-dot dot-error';
+                dotEl.title = `${info.label}: Verbindungsfehler`;
             }
+        }
+
+        // Click-Handler: direkt zum richtigen Mgmt-Tab springen
+        const hueBtn  = widget.querySelector('#light-hue-btn');
+        const wledBtn = widget.querySelector('#light-wled-btn');
+
+        const _openMgmt = (tab) => {
+            if (Management) {
+                Management.setTab(tab);
+                Management.init();
+            }
+            this.showScreen('screen-management');
         };
 
-        // 1. Initialer Status beim Laden
-        const config = HueService.getConfig();
-        updateVisuals(config.isEnabled, config.isConnected);
+        if (hueBtn)  hueBtn.onclick  = (e) => { e.stopPropagation(); _openMgmt('hue'); };
+        if (wledBtn) wledBtn.onclick = (e) => { e.stopPropagation(); _openMgmt('wled'); };
 
-        // 2. Klick-Handler: Umschalten (Toggle)
-        widget.onclick = async () => {
-            const isNowEnabled = HueService.toggleEnabled();
-            
-            // Sofortiges visuelles Feedback
-            updateVisuals(isNowEnabled, HueService.getConfig().isConnected);
-
-            if (isNowEnabled) {
-                // Wenn wir einschalten, prüfen wir, ob die Verbindung wirklich steht
-                text.innerText = "Verbinde...";
-                icon.classList.add('hue-blink');
-                
-                // Falls noch nie konfiguriert
-                if (!HueService.getConfig().bridgeIp) {
-                    await HueService.init();
-                } else {
-                    await HueService.checkConnection();
-                }
-                
-                icon.classList.remove('hue-blink');
-                
-                const currentConfig = HueService.getConfig();
-                if (currentConfig.isConnected) {
-                    updateVisuals(true, true);
-                } else {
-                    // Falls Verbindung fehlschlägt (Zertifikat etc.)
-                    text.innerText = "Fehler";
-                    this._handleHueCertificateError();
-                }
-            }
-        };
+        // Initialer Update + Live-Updates bei Status-Änderung
+        _update();
+        LightingCoordinator.onStatusChange(_update);
     },
 
-    _handleHueCertificateError: function() {
-        const config = HueService.getConfig();
-        if (!config.bridgeIp) {
-            alert("Keine Hue Bridge im Netzwerk gefunden.");
+    // Rückwärtskompatibilität – alter Name funktioniert noch
+    initHueWidget: function() { return this.initLightWidget(); },
+
+    /**
+     * Zeigt den Hue-Zertifikat-Fehler-Modal.
+     * Erläutert das Mixed-Content / Self-Signed-Cert Problem und führt
+     * den Nutzer durch den einmaligen Workaround.
+     * 
+     * Hintergrund: Seit Firmware 1.24 unterstützt die Bridge HTTPS
+     * mit selbstsigniertem Zertifikat. Der Browser muss dieses einmalig
+     * manuell akzeptieren, danach funktioniert HTTPS dauerhaft.
+     */
+    showHueCertError: function(bridgeIp) {
+        if (!bridgeIp) {
+            _showHueNoBridgeModal();
             return;
         }
 
-        const url = HueService.getSetupUrl();
-        
-        // Der "Workaround"-Dialog
-        const userAction = confirm(
-            `⚠️ HUE VERBINDUNGSPROBLEM\n\n` +
-            `Der Browser blockiert den Zugriff auf deine lokale Bridge (${config.bridgeIp}).\n\n` +
-            `LÖSUNG (Einmalig):\n` +
-            `1. Klicke OK, um die Hue-Diagnose-Seite zu öffnen.\n` +
-            `2. Klicke dort auf "Erweitert" -> "Weiter zu ... (unsicher)".\n` +
-            `3. Sobald du Text siehst, schließe den Tab und klicke hier erneut auf das Glühbirnen-Icon.`
-        );
+        // HTTPS-URL zur Bridge (für Zertifikat-Akzeptanz)
+        const certUrl = `https://${bridgeIp}/api/config`;
 
-        if (userAction) {
-            window.open(url, '_blank');
-        }
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        setTimeout(() => modal.classList.add('active'), 10);
+
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:480px;">
+                <h2 style="color:#f59e0b; margin-top:0; font-size:1.3rem;">⚠️ Einmalige Einrichtung nötig</h2>
+                
+                <p style="color:#ccc; line-height:1.6; margin-bottom:0;">
+                    Dein Browser blockiert die Verbindung zur Hue Bridge
+                    (<code style="background:#333; padding:1px 5px; border-radius:3px;">${bridgeIp}</code>),
+                    weil sie ein selbstsigniertes Zertifikat verwendet.
+                </p>
+
+                <div style="background:rgba(255,255,255,0.05); border:1px solid #444; padding:14px 18px; border-radius:8px; margin:16px 0; text-align:left;">
+                    <strong style="color:#fff; display:block; margin-bottom:8px;">Einmalige Lösung in 3 Schritten:</strong>
+                    <ol style="margin:0 0 0 18px; padding:0; color:#aaa; line-height:1.9; font-size:0.9rem;">
+                        <li>Klicke auf <strong style="color:#fff;">"Zertifikat öffnen"</strong> unten.</li>
+                        <li>Im neuen Tab: <strong style="color:#fff;">"Erweitert"</strong> → <strong style="color:#fff;">"Weiter zu ${bridgeIp}"</strong> klicken.</li>
+                        <li>Sobald du JSON-Text siehst: Tab schließen, dann hier erneut <strong style="color:#fff;">"Verbinden"</strong> klicken.</li>
+                    </ol>
+                </div>
+
+                <p style="color:#666; font-size:0.8rem; margin-bottom:16px;">
+                    Danach verbindet sich die App zuverlässig ohne diesen Schritt.
+                </p>
+
+                <div class="modal-buttons" style="gap:10px;">
+                    <button id="btn-open-cert" class="modal-btn" style="background:var(--accent-color); color:#000; font-weight:bold; flex:2;">
+                        🔗 Zertifikat öffnen
+                    </button>
+                    <button id="btn-close-cert" class="modal-btn btn-no" style="flex:1;">
+                        Schließen
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#btn-open-cert').onclick = () => {
+            window.open(certUrl, '_blank');
+        };
+        modal.querySelector('#btn-close-cert').onclick = () => {
+            modal.classList.remove('active');
+            setTimeout(() => { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 300);
+        };
     },
-
-    // --- DELEGIERUNG AN UI GAME MODUL ---
     switchToGame: function() { 
         if(Game) Game.switchToGame(); 
     },
 
     updateGameDisplay: function() {
         if(Game) Game.updateGameDisplay();
+    },
+
+    markDartBoxCorrected: function(boxIndex) {
+        if(Game) Game.markDartBoxCorrected(boxIndex);
+    },
+
+    showCorrectionCountdown: function(durationMs, onExpire) {
+        if(Game) Game.showCorrectionCountdown(durationMs, onExpire);
+        else if (onExpire) onExpire();
+    },
+
+    cancelCorrectionCountdown: function() {
+        if(Game) Game.cancelCorrectionCountdown();
     },
 
     showResult: function() {

@@ -33,38 +33,30 @@ export const SingleTraining = {
      */
     handleInput: function(session, player, dart) {
         const currentRoundIdx = player.turns.length;
-        
-        // Spiel-spezifische Punkte: Multiplier als Score (1, 2 oder 3)
-        const points = dart.isMiss ? 0 : dart.multiplier;
+        const targetVal = session.targets[currentRoundIdx];
+
+        // Treffer = kein Miss UND Basis trifft das aktuelle Zielfeld
+        const isHit = !dart.isMiss && dart.base === targetVal;
+        // Punkte = Multiplier (1/2/3) – aber nur bei Treffer auf das Ziel
+        const points = isHit ? dart.multiplier : 0;
 
         player.currentResidual += points;
-        session.tempDarts.push({ ...dart, points: points });
-        
-		let totalThrows = 0;
-		let totalHits = 0;
+        dart._isHit = isHit;
+        session.tempDarts.push({ ...dart, points });
 
-		// 1. Historie zählen
-		(player.turns || []).forEach(t => {
-			(t.darts || []).forEach(d => {
-				totalThrows++;
-				if (!d.isMiss) totalHits++; // Im Training ist alles was kein Miss ist ein Treffer
-			});
-		});
+        // Trefferquote live berechnen (Treffer auf Zielfeld / alle Würfe)
+        let totalThrows = 0;
+        let totalHits   = 0;
+        (player.turns || []).forEach(t => (t.darts || []).forEach(d => {
+            totalThrows++;
+            if (d._isHit) totalHits++;
+        }));
+        (session.tempDarts || []).forEach(d => {
+            totalThrows++;
+            if (d._isHit) totalHits++;
+        });
+        player.liveHitRate = totalThrows > 0 ? ((totalHits / totalThrows) * 100).toFixed(1) + '%' : '0.0%';
 
-		// 2. Aktuelle Darts zählen
-		(session.tempDarts || []).forEach(d => {
-			totalThrows++;
-			if (!d.isMiss) totalHits++;
-		});
-
-		// 3. Quote berechnen
-		if (totalThrows > 0) {
-			const rate = (totalHits / totalThrows) * 100;
-			player.liveHitRate = rate.toFixed(1) + '%';
-		} else {
-			player.liveHitRate = '0.0%';
-		}
-		
         // 3 Darts Check
         if (session.tempDarts.length >= 3) {
              const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);

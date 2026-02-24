@@ -36,19 +36,24 @@ export const AroundTheBoard = {
      * input === 'HIT' → !dart.isMiss
      */
     handleInput: function(session, player, dart) {
-        const currentTargetIdx = player.currentResidual; 
+        const currentTargetIdx = player.currentResidual;
         const targetVal = session.targets[currentTargetIdx];
-        
+        const variant   = player.variant || 'full';
+
         player.totalDarts++;
-        
-        const isHit = !dart.isMiss;
-        
+
+        // ── Treffervalidierung ────────────────────────────────────────────────
+        // Prüfe ob das eingegebene Segment dem Ziel + der Variante entspricht.
+        // Mit Pro-Keypad kann immer ein falsches Feld eingegeben werden → Miss.
+        const isHit = !dart.isMiss && _isValidHit(dart, targetVal, variant);
+
         if (isHit) {
-            player.currentResidual++; 
+            player.currentResidual++;
         } else {
             player.misses++;
         }
 
+        dart._isHit = isHit;
         session.tempDarts.push(dart);
 
 		// --- LIVE STATS: HIT RATE ---
@@ -59,14 +64,14 @@ export const AroundTheBoard = {
 		(player.turns || []).forEach(t => {
 			(t.darts || []).forEach(d => {
 				atbThrows++;
-				if (!d.isMiss) atbHits++;
+				if (d._isHit) atbHits++;
 			});
 		});
 
 		// 2. Aktuell
 		(session.tempDarts || []).forEach(d => {
 			atbThrows++;
-			if (!d.isMiss) atbHits++;
+			if (d._isHit) atbHits++;
 		});
 
 		// 3. Berechnen
@@ -200,3 +205,31 @@ export const AroundTheBoard = {
         };
     }
 };
+
+/**
+ * Prüft ob ein Dart das aktuelle ATB-Ziel trifft.
+ * 
+ * @param {Object} dart      - normalisiertes Dart-Objekt
+ * @param {number} targetVal - Zielwert (1-20 oder 25 für Bull)
+ * @param {string} variant   - 'full' | 'single-inner' | 'single-outer' | 'double' | 'triple'
+ */
+function _isValidHit(dart, targetVal, variant) {
+    // Grundbedingung: Zahl muss stimmen
+    if (dart.base !== targetVal) return false;
+
+    switch (variant) {
+        case 'double':
+            return dart.multiplier === 2;
+        case 'triple':
+            // Bull hat kein Triple – Triple-Variante akzeptiert T{n} für 1-20
+            return dart.multiplier === 3 && targetVal !== 25;
+        case 'single-inner':
+        case 'single-outer':
+            // Pro-Keypad unterscheidet nicht inner/outer → jede Single zählt
+            return dart.multiplier === 1;
+        case 'full':
+        default:
+            // Jede Multiplizität auf der richtigen Zahl zählt
+            return dart.multiplier >= 1;
+    }
+}

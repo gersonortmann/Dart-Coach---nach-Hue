@@ -42,7 +42,7 @@ export const ScoringDrill = {
         const val = dart.points;
         player.score += val;
         player.dartsThrown++;
-        
+        dart._isHit = !dart.isMiss && val > 0;
         session.tempDarts.push(dart);
 		
 		// --- LIVE STATS: PPT (Points per Turn) ---

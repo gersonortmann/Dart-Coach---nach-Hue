@@ -85,12 +85,12 @@ export const StatsService = {
             const di = settings.doubleIn || false;
             const dou = settings.doubleOut || false;
 
-            // Filter
+            // Filter by start score variant
             if (variant !== 'all') {
-                if (variant === 'sido' && (di || !dou)) return;
-                if (variant === 'siso' && (di || dou)) return;
-                if (variant === 'dido' && (!di || !dou)) return;
-                if (variant === 'diso' && (!di || dou)) return;
+                const ss = settings.startScore || 501;
+                if (variant === '301' && ss !== 301) return;
+                if (variant === '501' && ss !== 501) return;
+                if (variant === '701' && ss !== 701) return;
             }
 
             totalGames++;
@@ -306,6 +306,8 @@ export const StatsService = {
         let globalHits = 0; let globalDarts = 0;
         let dist = { singles: 0, doubles: 0, triples: 0 };
         const matchHistoryDetails = [];
+        const chartLabels = [];
+        const chartValues = [];
 
         filteredHistory.forEach(game => {
             const settings = game.settings || {};
@@ -324,7 +326,6 @@ export const StatsService = {
             totalScoreSum += score;
             if (score > bestScore) bestScore = score;
             
-            // Step 7b: Shared Helper statt manuelles Parsing
             const agg = this._aggregateHitDarts(game);
             globalHits += agg.hits;
             globalDarts += agg.totalDarts;
@@ -333,13 +334,25 @@ export const StatsService = {
             dist.triples += agg.triples;
 
             const matchHitRate = agg.totalDarts > 0 ? ((agg.hits / agg.totalDarts) * 100).toFixed(1) + '%' : '0.0%';
-            const opponents = (settings.opponents) ? settings.opponents : [];
+
+            // Firebase kann Arrays als Objekte {0:'A', 1:'B'} zurückliefern → normalisieren
+            const rawOpp = settings.opponents;
+            const opponents = Array.isArray(rawOpp) ? rawOpp
+                : (rawOpp && typeof rawOpp === 'object') ? Object.values(rawOpp) : [];
+
             let resultLabel = "Solo"; let resultClass = "res-solo";
             if (opponents.length > 0) {
-                 if (game.stats && game.stats.isWinner) { resultLabel = "SIEG"; resultClass = "res-win"; }
-                 else { resultLabel = "NIEDERLAGE"; resultClass = "res-loss"; }
+                // Wie X01: typeof-Check damit isWinner:false nicht als "unbekannt" gilt
+                if (typeof game.stats?.isWinner === 'boolean') {
+                    resultLabel = game.stats.isWinner ? "SIEG" : "NIEDERLAGE";
+                    resultClass = game.stats.isWinner ? "res-win" : "res-loss";
+                } else {
+                    resultLabel = "VS"; resultClass = "res-solo";
+                }
             }
             
+            chartLabels.push(this._formatDate(game.date, days));
+            chartValues.push(score);
             matchHistoryDetails.push({
                 date: this._formatDate(game.date, days),
                 score,
@@ -362,10 +375,7 @@ export const StatsService = {
             distribution: dist, 
             heatmap: {},
             matches: matchHistoryDetails.reverse(),
-            chart: { 
-                labels: filteredHistory.map(h => this._formatDate(h.date, days)), 
-                values: filteredHistory.map(h => h.totalScore || 0)
-            }
+            chart: { labels: chartLabels, values: chartValues }
         };
     },
 
@@ -498,11 +508,18 @@ export const StatsService = {
             dist.triples += agg.triples;
 
             const matchHitRate = agg.totalDarts > 0 ? ((agg.hits / agg.totalDarts) * 100).toFixed(1) + '%' : '0.0%';
-            const opponents = (game.settings && game.settings.opponents) ? game.settings.opponents : [];
+            // Firebase kann Arrays als Objekte zurückliefern → normalisieren
+            const rawOpp = game.settings?.opponents;
+            const opponents = Array.isArray(rawOpp) ? rawOpp
+                : (rawOpp && typeof rawOpp === 'object') ? Object.values(rawOpp) : [];
             let resultLabel = "Solo"; let resultClass = "res-solo";
             if (opponents.length > 0) {
-                 if (game.stats && game.stats.isWinner) { resultLabel = "SIEG"; resultClass = "res-win"; }
-                 else { resultLabel = "NIEDERLAGE"; resultClass = "res-loss"; }
+                if (typeof game.stats?.isWinner === 'boolean') {
+                    resultLabel = game.stats.isWinner ? "SIEG" : "NIEDERLAGE";
+                    resultClass = game.stats.isWinner ? "res-win" : "res-loss";
+                } else {
+                    resultLabel = "VS"; resultClass = "res-solo";
+                }
             }
             matchHistoryDetails.push({
                 date: this._formatDate(game.date, days),
@@ -592,6 +609,214 @@ export const StatsService = {
                 labels: filteredHistory.map(h => this._formatDate(h.date, days)), 
                 values: filteredHistory.map(h => h.totalScore !== undefined ? h.totalScore : 0) 
             }
+        };
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  HALVE IT
+    // ─────────────────────────────────────────────────────────────────────────
+    getHalveItStats: function(playerId, days = 30) {
+        const filteredHistory = this._getFilteredHistory(playerId, 'halve-it', days);
+        if (!filteredHistory || filteredHistory.length === 0) return null;
+
+        let totalGames = 0, scoreSum = 0, bestScore = 0;
+        let totalHalvings = 0, totalRounds = 0, totalPerfect = 0;
+        const matchHistoryDetails = [];
+
+        filteredHistory.forEach(game => {
+            totalGames++;
+            const sm = game.stats?.summary || game.stats || {};
+            const score       = sm.score       ?? game.totalScore ?? 0;
+            const halvings    = sm.halvings     ?? 0;
+            const perfect     = sm.perfectRounds ?? 0;
+            const rounds      = sm.totalRounds  ?? (game.turns?.length || 0);
+
+            scoreSum       += score;
+            totalHalvings  += halvings;
+            totalRounds    += rounds;
+            totalPerfect   += perfect;
+            if (score > bestScore) bestScore = score;
+
+            const halvingRate = rounds > 0
+                ? ((halvings / rounds) * 100).toFixed(0) + '%' : '0%';
+
+            // Runden-Breakdown für aufklappbare Historie
+            const roundBreakdown = (game.turns || []).map((t, i) => ({
+                idx: i + 1,
+                target: game.targets?.[i] ?? '?',
+                score:  t.scoreAdded ?? t.score ?? 0,
+                wasHalved: !!t.wasHalved,
+                totalAfter: t.totalScoreAfter ?? 0,
+                darts: t.darts || []
+            }));
+
+            matchHistoryDetails.push({
+                date:       this._formatDate(game.date, days),
+                score, halvings, halvingRate, perfect, rounds,
+                mode:       game.settings?.mode || 'standard',
+                roundBreakdown,
+            });
+        });
+
+        if (totalGames === 0) return null;
+        const globalHalvingRate = totalRounds > 0
+            ? ((totalHalvings / totalRounds) * 100).toFixed(0) + '%' : '0%';
+
+        return {
+            summary: {
+                games:        totalGames,
+                avgScore:     (scoreSum / totalGames).toFixed(0),
+                bestScore,
+                halvingRate:  globalHalvingRate,
+                perfectRounds: totalPerfect,
+            },
+            matches: matchHistoryDetails.reverse(),
+            chart: {
+                labels:    filteredHistory.map(h => this._formatDate(h.date, days)),
+                values:    filteredHistory.map(h => h.stats?.summary?.score ?? h.stats?.totalScore ?? h.totalScore ?? 0),
+            },
+        };
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  SCORING DRILL
+    // ─────────────────────────────────────────────────────────────────────────
+    getScoringDrillStats: function(playerId, days = 30, variant = 'all') {
+        const filteredHistory = this._getFilteredHistory(playerId, 'scoring-drill', days);
+        if (!filteredHistory || filteredHistory.length === 0) return null;
+
+        let totalGames = 0, scoreSum = 0, bestScore = 0;
+        let tonSum = 0, ton40Sum = 0, maxSum = 0;
+        let avgSum = 0;
+        const matchHistoryDetails = [];
+        const chartLabels = [];
+        const chartValues = [];
+
+        filteredHistory.forEach(game => {
+            // Variant filter: 33 / 66 / 99 Darts
+            const dartLimit = game.settings?.dartLimit ?? game.stats?.dartLimit ?? 99;
+            if (variant !== 'all' && dartLimit !== parseInt(variant)) return;
+
+            totalGames++;
+            const sm = game.stats?.summary || game.stats || {};
+            const ps = game.stats?.powerScores || {};
+            const score = sm.score  ?? game.totalScore ?? 0;
+            const avg   = parseFloat(sm.avg ?? game.stats?.avg ?? 0);
+            const ton   = sm.ton    ?? ps.ton   ?? 0;
+            const ton40 = sm.ton40  ?? ps.ton40 ?? 0;
+            const max   = sm.max    ?? ps.max   ?? 0;
+
+            scoreSum += score;
+            avgSum   += avg;
+            tonSum   += ton;
+            ton40Sum += ton40;
+            maxSum   += max;
+            if (score > bestScore) bestScore = score;
+
+            const roundBreakdown = (game.turns || []).map((t, i) => ({
+                idx: i + 1,
+                score: t.score ?? 0,
+                totalAfter: t.totalScoreAfter ?? 0,
+                darts: t.darts || []
+            }));
+
+            chartLabels.push(this._formatDate(game.date, days));
+            chartValues.push(avg);
+
+            matchHistoryDetails.push({
+                date: this._formatDate(game.date, days),
+                score, avg: avg.toFixed(1), ton, ton40, max,
+                limit: dartLimit,
+                roundBreakdown,
+            });
+        });
+
+        if (totalGames === 0) return null;
+
+        return {
+            summary: {
+                games:    totalGames,
+                avgScore: (scoreSum / totalGames).toFixed(0),
+                bestScore,
+                avgAvg:   (avgSum / totalGames).toFixed(1),
+                total180: maxSum,
+                total140: ton40Sum,
+                total100: tonSum,
+            },
+            matches: matchHistoryDetails.reverse(),
+            chart: { labels: chartLabels, values: chartValues },
+        };
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  CHECKOUT CHALLENGE
+    // ─────────────────────────────────────────────────────────────────────────
+    getCheckoutChallengeStats: function(playerId, days = 30) {
+        const filteredHistory = this._getFilteredHistory(playerId, 'checkout-challenge', days);
+        if (!filteredHistory || filteredHistory.length === 0) return null;
+
+        let totalGames = 0, scoreSum = 0, bestScore = 0;
+        let totalCheckoutsHit = 0, totalCheckoutsAttempted = 0;
+        let avgDpcSum = 0, avgDpcCount = 0;
+        const matchHistoryDetails = [];
+
+        filteredHistory.forEach(game => {
+            totalGames++;
+            const sm   = game.stats?.summary || game.stats || {};
+            const score       = sm.score       ?? game.totalScore ?? 0;
+            const hit         = sm.checkoutsHit   ?? 0;
+            const total       = sm.checkoutsTotal ?? (game.targets?.length ?? 0);
+            const avgDpc      = parseFloat(sm.avgDartsPerCheckout ?? 0);
+            const difficulty  = game.settings?.difficulty || 'standard';
+
+            scoreSum               += score;
+            totalCheckoutsHit      += hit;
+            totalCheckoutsAttempted += total;
+            if (avgDpc > 0) { avgDpcSum += avgDpc; avgDpcCount++; }
+            if (score > bestScore) bestScore = score;
+
+            const checkoutRate = total > 0
+                ? ((hit / total) * 100).toFixed(0) + '%' : '0%';
+
+            const roundBreakdown = (game.turns || []).map((t, i) => ({
+                idx:    i + 1,
+                target: game.targets?.[i] ?? '?',
+                hit:    (t.score ?? 0) > 0,
+                darts:  t.darts || []
+            }));
+
+            matchHistoryDetails.push({
+                date: this._formatDate(game.date, days),
+                score, hit, total, checkoutRate,
+                avgDpc: avgDpc > 0 ? avgDpc.toFixed(1) : '-',
+                difficulty, roundBreakdown,
+            });
+        });
+
+        if (totalGames === 0) return null;
+
+        const globalRate = totalCheckoutsAttempted > 0
+            ? ((totalCheckoutsHit / totalCheckoutsAttempted) * 100).toFixed(0) + '%' : '0%';
+
+        return {
+            summary: {
+                games:         totalGames,
+                avgScore:      (scoreSum / totalGames).toFixed(0),
+                bestScore,
+                checkoutRate:  globalRate,
+                avgDpc:        avgDpcCount > 0 ? (avgDpcSum / avgDpcCount).toFixed(1) : '-',
+            },
+            matches: matchHistoryDetails.reverse(),
+            chart: {
+                labels: filteredHistory.map(h => this._formatDate(h.date, days)),
+                values: filteredHistory.map(h => {
+                    const sm = h.stats?.summary || h.stats || {};
+                    const hit = sm.checkoutsHit ?? 0;
+                    const tot = sm.checkoutsTotal ?? h.targets?.length ?? 1;
+                    return tot > 0 ? Math.round((hit / tot) * 100) : 0;
+                }),
+            },
         };
     },
 

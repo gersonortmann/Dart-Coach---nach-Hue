@@ -166,10 +166,92 @@ main {
     padding-bottom: var(--gap-lg);
 }
 
-/* Hue Widget */
+/* ── Lighting Widget (Hue + WLED kombiniert) ──────────────────── */
+
+.light-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+}
+
+.light-indicator:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: #555;
+}
+
+.light-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+
+.dot-on    { background: #22c55e; box-shadow: 0 0 5px #22c55e88; }
+.dot-off   { background: #444; }
+.dot-error { background: #f59e0b; box-shadow: 0 0 5px #f59e0b88; }
+
+/* Dartbox Status-Klassen ─────────────────────────────────────────────────── */
+
+/* Treffer auf Ziel → grüner Rahmen */
+.dart-hit {
+    border-color: var(--accent-color, #22c55e) !important;
+    box-shadow: 0 0 5px rgba(34, 197, 94, 0.3);
+}
+
+/* Miss oder falsches Feld → roter Rahmen + rote Schrift */
+.dart-miss {
+    border-color: var(--miss-color, #ef4444) !important;
+    color: var(--miss-color, #ef4444) !important;
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.25);
+}
+
+/* Zuletzt korrigierte Box → gelber Rahmen (Lücke oder neu gefüllt) */
+.dart-corrected {
+    border-color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.12) !important;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    animation: dart-corrected-pulse 0.4s ease-out;
+}
+
+@keyframes dart-corrected-pulse {
+    0%   { background: rgba(245, 158, 11, 0.35); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
+    100% { background: rgba(245, 158, 11, 0.12); box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+}
+
+/* Gehaltene Darts (warten auf re-application) → leicht gedimmt */
+.dart-held {
+    opacity: 0.55;
+    border-style: dashed !important;
+}
+
+/* Rückwärtskompatibilität – alte Hue-Klassen bleiben für den Fall */
 .hue-connected #hue-icon { filter: none; text-shadow: 0 0 10px #00ff00; }
 .hue-connected #hue-text { color: #00ff00; }
 .hue-error #hue-icon { filter: grayscale(100%); opacity: 0.5; }
 .hue-error #hue-text { color: var(--miss-color); }
 .hue-blink { animation: hue-pulse 1s infinite; }
 @keyframes hue-pulse { 0% { opacity: 0.5; } 50% { opacity: 1; text-shadow: 0 0 15px yellow; } 100% { opacity: 0.5; } }
+/* ── Korrektur-Countdown: Platz fest reservieren ─────────────────────────── */
+/* Der Balken wird nach dart-display-container eingefügt. Der Container selbst
+   bekommt einen festen unteren Abstand der dem Balken (4px) + Gap entspricht,
+   damit das Layout beim Ein-/Ausblenden des Balkens stabil bleibt.            */
+#dart-display-container {
+    margin-bottom: 10px; /* Platz für den Balken + Abstand */
+	padding: 0px 30px;
+}
+
+#correction-countdown {
+    /* Feste Höhe, kein zusätzlicher Platz mehr nötig */
+    height: 4px;
+    margin-top: 0;
+    /* position: relative bereits im JS gesetzt */
+}

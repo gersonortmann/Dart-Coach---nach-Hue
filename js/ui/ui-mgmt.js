@@ -2,6 +2,7 @@ import { State } from '../core/state.js';
 import { Store } from '../core/store.js';
 import { UI } from './ui-core.js';
 import { HueService } from '../core/hue-service.js';
+import { WledService } from '../core/wled-service.js';
 import { AutodartsService } from '../core/autodarts-service.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -13,7 +14,8 @@ const STORAGE_KEY = 'dc_app_settings';
 const TABS = [
     { id: 'settings',  icon: '⚙️',  label: 'Einstellungen' },
     { id: 'database',  icon: '💾',  label: 'Datenbank' },
-    { id: 'hue',       icon: '💡',  label: 'Lichtsteuerung' },
+    { id: 'hue',       icon: '💡',  label: 'Hue' },
+    { id: 'wled',      icon: '🌈',  label: 'WLED' },
     { id: 'autodarts', icon: '📡',  label: 'Autodarts' },
 ];
 
@@ -31,6 +33,7 @@ const GAME_META = {
 
 const DEFAULT_SETTINGS = {
     overlayDuration: 1200,
+    correctionWindow: 1.5,
     speechEnabled: false,
     defaults: {
         x01: { startScore: 501, doubleIn: false, doubleOut: true, mode: 'legs', bestOf: 3 },
@@ -144,6 +147,7 @@ export const Management = {
             case 'settings':  this._renderSettings(content);  break;
             case 'database':  this._renderDatabase(content);  break;
             case 'hue':       this._renderHue(content);       break;
+            case 'wled':      this._renderWled(content);      break;
             case 'autodarts': this._renderAutodarts(content);  break;
         }
     },
@@ -163,6 +167,14 @@ export const Management = {
                     <input type="range" id="set-overlay" class="mgmt-range" min="400" max="3000" step="100" value="${s.overlayDuration}">
                     <span id="set-overlay-val" class="mgmt-range-val">${s.overlayDuration} ms</span>
                 </div>
+            </div>
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">Korrektur-Fenster</label>
+                <div class="mgmt-range-row">
+                    <input type="range" id="set-corrwindow" class="mgmt-range" min="0" max="3" step="0.5" value="${s.correctionWindow ?? 1.5}">
+                    <span id="set-corrwindow-val" class="mgmt-range-val">${s.correctionWindow ?? 1.5}s</span>
+                </div>
+                <span class="mgmt-hint">Zeit nach Dart 3 für Korrekturen (0 = deaktiviert)</span>
             </div>
             <div class="mgmt-field">
                 <label class="mgmt-lbl">Sprachausgabe</label>
@@ -223,6 +235,17 @@ export const Management = {
         if (slider) {
             slider.oninput = () => { valEl.textContent = slider.value + ' ms'; };
             slider.onchange = () => { appSettings.overlayDuration = parseInt(slider.value); _saveSettings(); this._flash(slider.parentElement); };
+        }
+
+        const corrSlider = el.querySelector('#set-corrwindow');
+        const corrVal    = el.querySelector('#set-corrwindow-val');
+        if (corrSlider) {
+            corrSlider.oninput  = () => { corrVal.textContent = corrSlider.value + 's'; };
+            corrSlider.onchange = () => {
+                appSettings.correctionWindow = parseFloat(corrSlider.value);
+                _saveSettings();
+                this._flash(corrSlider.parentElement);
+            };
         }
         const btnSpeech = el.querySelector('#set-speech');
         if (btnSpeech) btnSpeech.onclick = () => {
@@ -732,12 +755,14 @@ export const Management = {
                         <div id="hue-res-loading" style="margin-top:16px; color:#888;">Lade Geräte...</div>
                         <div id="hue-res-container" style="display:none; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px; border-top:1px solid #444; padding-top:15px;">
                             <div>
-                                <label class="mgmt-lbl">1. Raum (Pflicht)</label>
+                                <label class="mgmt-lbl">Raum / Gruppe</label>
                                 <select id="hue-sel-group" class="mgmt-input" style="width:100%;"></select>
+                                <div class="mgmt-hint" style="margin-top:4px;">Pflicht – steuert den gesamten Raum</div>
                             </div>
                             <div>
-                                <label class="mgmt-lbl">2. Lampe (Optional)</label>
+                                <label class="mgmt-lbl">Einzelne Lampe (optional)</label>
                                 <select id="hue-sel-light" class="mgmt-input" style="width:100%;"></select>
+                                <div class="mgmt-hint" style="margin-top:4px;">Nur setzen für gezielte Einzelsteuerung</div>
                             </div>
                         </div>
                     ` : `
@@ -934,7 +959,10 @@ export const Management = {
             col1 += `
                 <div style="margin-bottom:10px;">
                     <label class="mgmt-lbl" style="font-size:0.8rem;">${ev.label}</label>
-                    ${this._buildEffectDropdown('events', ev.id, currentVal)}
+                    <div style="display:flex; gap:6px;">
+                        ${this._buildEffectDropdown('events', ev.id, currentVal)}
+                        <button class="mgmt-btn-sm hue-test-btn" data-val="${currentVal || ''}" title="Effekt testen">▶</button>
+                    </div>
                 </div>
             `;
         });
@@ -947,7 +975,10 @@ export const Management = {
             col2 += `
                 <div style="margin-bottom:10px;">
                     <label class="mgmt-lbl" style="font-size:0.8rem;">${sc.label}</label>
-                    ${this._buildEffectDropdown('screens', sc.id, currentVal)}
+                    <div style="display:flex; gap:6px;">
+                        ${this._buildEffectDropdown('screens', sc.id, currentVal)}
+                        <button class="mgmt-btn-sm hue-test-btn" data-val="${currentVal || ''}" title="Effekt testen">▶</button>
+                    </div>
                 </div>
             `;
         });
@@ -958,12 +989,21 @@ export const Management = {
         // Listener für alle Dropdowns
         container.querySelectorAll('select').forEach(sel => {
             sel.onchange = (e) => {
-                const category = e.target.dataset.cat; // 'events' oder 'screens'
-                const key = e.target.dataset.key;      // 'HIT' oder 'screen-game'
-                HueService.setConfigValue(category, key, e.target.value);
-                
-                // Optional: Kurzes visuelles Feedback über den Test-Befehl?
-                // HueService.executeEffect(e.target.value); 
+                const category = e.target.dataset.cat;
+                const key      = e.target.dataset.key;
+                const val      = e.target.value;
+                HueService.setConfigValue(category, key, val);
+                // Test-Button des gleichen Rows aktualisieren
+                const btn = e.target.parentElement.querySelector('.hue-test-btn');
+                if (btn) btn.dataset.val = val;
+            };
+        });
+
+        // Test-Buttons
+        container.querySelectorAll('.hue-test-btn').forEach(btn => {
+            btn.onclick = () => {
+                const val = btn.dataset.val;
+                if (val) HueService.executeEffect(val);
             };
         });
     },
@@ -1021,6 +1061,316 @@ export const Management = {
     },
 
     // ═══════════════════════════════════════════════════════════
+    //  TAB: WLED
+    // ═══════════════════════════════════════════════════════════
+
+    _renderWled(el) {
+        const cfg = WledService.getConfig();
+        const ok  = cfg.isEnabled && cfg.isConnected;
+
+        el.innerHTML = `
+            ${this._section(`<span style="display:flex;align-items:center;gap:10px;">🌈 WLED Beleuchtung <span class="mgmt-badge ${ok ? 'mgmt-ok' : cfg.isEnabled ? 'mgmt-warn' : 'mgmt-off'}">${ok ? '● Verbunden' : cfg.isEnabled ? '● Fehler' : '○ Aus'}</span></span>`, `
+                <div class="mgmt-toggle-row" style="margin-bottom:12px;">
+                    <button id="wled-pwr" class="mgmt-toggle ${cfg.isEnabled ? 'on' : ''}">${cfg.isEnabled ? 'AN' : 'AUS'}</button>
+                    <span>WLED Beleuchtung ${cfg.isEnabled ? 'aktiv' : 'deaktiviert'}</span>
+                </div>
+                <div class="mgmt-hint">ESP32/ESP8266 Streifen via JSON-API (HTTP). Für die Dartboard-Umrandung.</div>
+            `)}
+
+            ${cfg.isEnabled ? `
+                ${this._section('Verbindung', `
+                    <div class="mgmt-field">
+                        <label class="mgmt-lbl">WLED IP-Adresse</label>
+                        <div class="mgmt-ip-row" style="display:flex; gap:10px;">
+                            <input type="text" id="wled-ip" class="mgmt-input" style="flex:1;" value="${cfg.ip || ''}" placeholder="192.168.178.xx">
+                            <button id="wled-conn" class="mgmt-btn-sm mgmt-btn-accent">Verbinden</button>
+                            ${ok ? `
+                                <button id="wled-test-on"  class="mgmt-btn-sm" style="background:#22c55e; color:white;" title="Licht ein">Ein</button>
+                                <button id="wled-test-off" class="mgmt-btn-sm" style="background:#ef4444; color:white;" title="Licht aus">Aus</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${ok ? `
+                        <div id="wled-info" class="mgmt-info-table" style="margin-top:12px;">
+                            <div class="mgmt-info-row">
+                                <span class="mgmt-info-k">Gerät</span>
+                                <span class="mgmt-info-v" id="wled-info-name">Lade...</span>
+                            </div>
+                        </div>
+                    ` : `<div class="mgmt-hint" style="margin-top:10px;">IP eingeben und verbinden.</div>`}
+                `)}
+
+                ${ok ? `
+                    ${this._section('Helligkeit', `
+                        <div class="mgmt-field">
+                            <div class="mgmt-range-row">
+                                <input type="range" id="wled-bri" class="mgmt-range" min="20" max="255" step="5" value="${cfg.brightness ?? 200}">
+                                <span id="wled-bri-val" class="mgmt-range-val">${Math.round((cfg.brightness ?? 200) / 255 * 100)}%</span>
+                            </div>
+                        </div>
+                    `)}
+
+                    ${this._section('Presets', `
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                            <button id="wled-load-presets" class="mgmt-btn-sm mgmt-btn-accent">🔄 Presets laden</button>
+                            <span id="wled-preset-count" style="color:#888; font-size:0.85rem;">${WledService.getPresets().length > 0 ? WledService.getPresets().length + ' Presets geladen' : 'Noch nicht geladen'}</span>
+                        </div>
+                        <div class="mgmt-hint">Presets werden direkt in WLED gespeichert und hier als Option angeboten.</div>
+                    `)}
+
+                    ${this._section('Ereignisse & Stimmung', `
+                        <div id="wled-config-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;"></div>
+                    `)}
+
+                    ${this._section('💾 Lichtprofile', `
+                        <div class="mgmt-hint" style="margin-bottom:12px;">Speichere die aktuelle Konfiguration als benanntes Profil – wechsle mit einem Klick z.B. zwischen „Entspannt" und „Party".</div>
+                        <div style="display:flex; gap:8px; margin-bottom:16px;">
+                            <input type="text" id="wled-profile-name" class="mgmt-input" style="flex:1;" placeholder="Profilname …" maxlength="40">
+                            <button id="wled-profile-save" class="mgmt-btn-sm mgmt-btn-accent">💾 Speichern</button>
+                        </div>
+                        <div id="wled-profile-list"></div>
+                    `)}
+                ` : ''}
+            ` : ''}
+        `;
+
+        // ── Basis-Events ──────────────────────────────────────────────────────
+        const btnPwr = el.querySelector('#wled-pwr');
+        if (btnPwr) btnPwr.onclick = () => { WledService.toggleEnabled(); this._renderWled(el); };
+
+        const btnConn = el.querySelector('#wled-conn');
+        if (btnConn) btnConn.onclick = async () => {
+            const inp = el.querySelector('#wled-ip');
+            const ip  = inp?.value.trim();
+            if (!ip) return;
+            
+            btnConn.textContent = '⏳';
+            btnConn.disabled = true;
+            WledService.setIp(ip);
+            
+            const info = await WledService.checkConnection();
+            if (info) {
+                this._renderWled(el);
+                // Geräteinfo nachladen
+                const nameEl = el.querySelector('#wled-info-name');
+                if (nameEl && info.name) nameEl.textContent = `${info.name} (${info.ledCount ?? '?'} LEDs)`;
+            } else {
+                btnConn.textContent = '❌ Fehler';
+                btnConn.disabled = false;
+                setTimeout(() => { btnConn.textContent = 'Verbinden'; btnConn.disabled = false; }, 2000);
+            }
+        };
+
+        const btnOn  = el.querySelector('#wled-test-on');
+        const btnOff = el.querySelector('#wled-test-off');
+        if (btnOn)  btnOn.onclick  = () => WledService.testOn();
+        if (btnOff) btnOff.onclick = () => WledService.testOff();
+
+        // Profil speichern
+        const btnSaveProfile = el.querySelector('#wled-profile-save');
+        const inpProfileName = el.querySelector('#wled-profile-name');
+        if (btnSaveProfile) {
+            btnSaveProfile.onclick = () => {
+                const name = inpProfileName?.value.trim();
+                if (!name) { inpProfileName?.focus(); return; }
+                WledService.saveProfile(name);
+                if (inpProfileName) inpProfileName.value = '';
+                const profileList = el.querySelector('#wled-profile-list');
+                if (profileList) this._renderWledProfiles(profileList);
+                this._flash(btnSaveProfile);
+            };
+            if (inpProfileName) {
+                inpProfileName.onkeydown = (e) => { if (e.key === 'Enter') btnSaveProfile.click(); };
+            }
+        }
+		
+		// Brightness Slider
+        const briSlider = el.querySelector('#wled-bri');
+        const briVal    = el.querySelector('#wled-bri-val');
+        if (briSlider) {
+            briSlider.oninput  = () => { briVal.textContent = Math.round(briSlider.value / 255 * 100) + '%'; };
+            briSlider.onchange = () => { WledService.setBrightness(briSlider.value); };
+        }
+
+        // Presets laden
+        const btnPresets = el.querySelector('#wled-load-presets');
+        if (btnPresets) btnPresets.onclick = async () => {
+            btnPresets.textContent = '⏳';
+            const presets = await WledService.fetchPresets();
+            const countEl = el.querySelector('#wled-preset-count');
+            if (countEl) countEl.textContent = presets.length + ' Presets geladen';
+            btnPresets.textContent = '🔄 Presets laden';
+            // Config-Grid neu rendern damit Presets in Dropdowns erscheinen
+            const grid = el.querySelector('#wled-config-grid');
+            if (grid) this._renderWledConfigGrid(grid);
+        };
+
+        // Config-Grid initialisieren
+        if (ok) {
+            const grid = el.querySelector('#wled-config-grid');
+            if (grid) this._renderWledConfigGrid(grid);
+
+            // Profile-Liste rendern
+            const profileList = el.querySelector('#wled-profile-list');
+            if (profileList) this._renderWledProfiles(profileList);
+
+            // Geräteinfo direkt laden
+            WledService.checkConnection().then(info => {
+                const nameEl = el.querySelector('#wled-info-name');
+                if (nameEl && info) nameEl.textContent = `${info.name} (${info.ledCount ?? '?'} LEDs)`;
+            });
+        }
+    },
+
+    _renderWledConfigGrid(container) {
+        const cfg     = WledService.getConfig();
+        const colors  = WledService.getColors();
+        const effects = WledService.getEffects();
+        const presets = WledService.getPresets();
+
+        const EVENTS = [
+            { id: 'HIT',           label: 'Treffer (Standard)' },
+            { id: 'MISS',          label: 'Fehlwurf' },
+            { id: 'BUST',          label: 'Bust' },
+            { id: 'HIGH_SCORE',    label: 'Highscore (100+)' },
+            { id: '180',           label: '180 / Maximum' },
+            { id: 'CHECK',         label: 'Check / Runden-Sieg' },
+            { id: 'WIN',           label: 'Match gewonnen' },
+            { id: 'CRICKET_OPEN',  label: 'Cricket: Öffnen' },
+            { id: 'CRICKET_CLOSE', label: 'Cricket: Schließen' },
+            { id: 'CORRECTION',    label: '⏱ Korrektur-Fenster' },
+        ];
+
+        const SCREENS = [
+            { id: 'screen-dashboard',   label: 'Dashboard' },
+            { id: 'screen-match-setup', label: 'Match Setup' },
+            { id: 'screen-game',        label: 'Im Spiel (Idle)' },
+            { id: 'screen-result',      label: 'Ergebnis-Screen' },
+        ];
+
+        const buildDropdown = (category, id, current) => {
+            let html = `<select class="mgmt-input" style="width:100%; font-size:0.85rem;" data-cat="${category}" data-key="${id}">`;
+            html += `<option value="off" ${!current || current === 'off' ? 'selected' : ''}>— Aus —</option>`;
+
+            // Farben
+            html += `<optgroup label="Farben">`;
+            Object.entries(colors).forEach(([k, v]) => {
+                const val = `color:${k}`;
+                html += `<option value="${val}" ${current === val ? 'selected' : ''}>🎨 ${v.name}</option>`;
+            });
+            html += `</optgroup>`;
+
+            // Effekte (animiert)
+            html += `<optgroup label="Effekte (Animiert)">`;
+            Object.entries(effects).forEach(([k, v]) => {
+                const val = `effect:${k}`;
+                html += `<option value="${val}" ${current === val ? 'selected' : ''}>✨ ${v.name}</option>`;
+            });
+            html += `</optgroup>`;
+
+            // Presets
+            if (presets.length > 0) {
+                html += `<optgroup label="Presets (WLED)">`;
+                presets.forEach(p => {
+                    const val = `preset:${p.id}`;
+                    html += `<option value="${val}" ${current === val ? 'selected' : ''}>📋 ${p.name}</option>`;
+                });
+                html += `</optgroup>`;
+            }
+            html += `</select>`;
+            return html;
+        };
+
+        let col1 = `<div><h5 style="margin:0 0 10px 0; color:var(--accent-color);">Ereignisse</h5>`;
+        EVENTS.forEach(ev => {
+            const cur = cfg.events[ev.id];
+            col1 += `
+                <div style="margin-bottom:10px;">
+                    <label class="mgmt-lbl" style="font-size:0.8rem;">${ev.label}</label>
+                    <div style="display:flex; gap:6px;">
+                        ${buildDropdown('events', ev.id, cur)}
+                        <button class="mgmt-btn-sm wled-test-btn" data-val="${cur || 'off'}" title="Testen">▶</button>
+                    </div>
+                </div>`;
+        });
+        col1 += `</div>`;
+
+        let col2 = `<div><h5 style="margin:0 0 10px 0; color:var(--accent-color);">Screens (Stimmung)</h5>`;
+        SCREENS.forEach(sc => {
+            const cur = cfg.screens[sc.id];
+            col2 += `
+                <div style="margin-bottom:10px;">
+                    <label class="mgmt-lbl" style="font-size:0.8rem;">${sc.label}</label>
+                    <div style="display:flex; gap:6px;">
+                        ${buildDropdown('screens', sc.id, cur)}
+                        <button class="mgmt-btn-sm wled-test-btn" data-val="${cur || 'off'}" title="Testen">▶</button>
+                    </div>
+                </div>`;
+        });
+        col2 += `</div>`;
+
+        container.innerHTML = col1 + col2;
+
+        // Dropdown-Listener
+        container.querySelectorAll('select').forEach(sel => {
+            sel.onchange = (e) => {
+                const { cat, key } = e.target.dataset;
+                const val = e.target.value;
+                WledService.setConfigValue(cat, key, val);
+                const btn = e.target.parentElement.querySelector('.wled-test-btn');
+                if (btn) btn.dataset.val = val;
+            };
+        });
+
+        // Test-Buttons
+        container.querySelectorAll('.wled-test-btn').forEach(btn => {
+            btn.onclick = () => {
+                const val = btn.dataset.val;
+                if (val && val !== 'off') WledService.testEffect(val);
+            };
+        });
+    },
+
+    /**
+     * Rendert die gespeicherten Lichtprofile als Liste mit Laden/Löschen.
+     * @param {HTMLElement} container – #wled-profile-list
+     */
+    _renderWledProfiles(container) {
+        const profiles = WledService.getProfiles();
+
+        if (profiles.length === 0) {
+            container.innerHTML = `<div class="mgmt-empty" style="padding:10px 0; font-size:0.85rem;">Noch keine Profile gespeichert.</div>`;
+            return;
+        }
+
+        container.innerHTML = profiles.map(p => `
+            <div class="mgmt-hcard" style="--ha:#6366f1; margin-bottom:6px; display:flex; align-items:center; gap:8px; padding:8px 10px; flex-shrink:0;">
+                <div class="mgmt-hcard-bar" style="border-radius:4px 0 0 4px;"></div>
+                <span style="flex:1; font-weight:600; font-size:0.9rem;">${_esc(p.name)}</span>
+                <button class="mgmt-btn-sm wled-profile-load" data-id="${p.id}" style="background:#6366f1; color:white;" title="Profil anwenden">▶ Laden</button>
+                <button class="mgmt-btn-sm wled-profile-del"  data-id="${p.id}" style="background:transparent; color:#ef4444; border:1px solid #ef4444;" title="Profil löschen">🗑</button>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('.wled-profile-load').forEach(btn => {
+            btn.onclick = () => {
+                WledService.loadProfile(btn.dataset.id);
+                // Config-Grid und Profile-Liste neu rendern
+                const grid = btn.closest('.mgmt-card')?.parentElement?.querySelector('#wled-config-grid');
+                if (grid) this._renderWledConfigGrid(grid);
+                this._flash(btn);
+            };
+        });
+
+        container.querySelectorAll('.wled-profile-del').forEach(btn => {
+            btn.onclick = () => {
+                WledService.deleteProfile(btn.dataset.id);
+                this._renderWledProfiles(container);
+            };
+        });
+    },
+
+    // ═══════════════════════════════════════════════════════════
     //  TAB 4: AUTODARTS
     // ═══════════════════════════════════════════════════════════
 
@@ -1073,5 +1423,10 @@ export const Management = {
     getSettings() {
         if (!appSettings) _loadSettings();
         return appSettings;
+    },
+
+    /** Setzt den aktiven Tab ohne neu zu rendern (für externen Aufruf vor init()) */
+    setTab(tabId) {
+        activeTab = tabId;
     },
 };

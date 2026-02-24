@@ -120,6 +120,7 @@ export const HalveIt = {
         const isHit = this._checkHit(targetId, dart);
         
         // Speichern (mit Hit-Flag)
+        dart._isHit = isHit;
         session.tempDarts.push({ ...dart, isTargetHit: isHit });
 
         // A) Wurf 1 oder 2: RUHE (Kein Overlay)

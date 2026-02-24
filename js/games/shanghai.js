@@ -44,8 +44,19 @@ export const Shanghai = {
             hitMultiplier = dart.multiplier;
         }
         
-        player.currentResidual += points;
-        session.tempDarts.push(dart);
+        dart._isHit = !dart.isMiss && dart.base === target;
+        // Punkte nur auf das Zielfeld zählen
+        const hitPoints = dart._isHit ? dart.points : 0;
+        player.currentResidual += hitPoints;
+		session.tempDarts.push(dart);
+
+		// Live-Trefferquote für Spieler-Header
+		const pastDarts  = player.turns.flatMap(t => t.darts || []);
+		const allDarts   = [...pastDarts, ...session.tempDarts];
+		const totalHits  = allDarts.filter(d => d._isHit).length;
+		player.liveHitRate = allDarts.length > 0
+			? ((totalHits / allDarts.length) * 100).toFixed(1) + '%'
+			: '0.0%';
 
         // 1. SHANGHAI CHECK (S-D-T im 3. Dart)
         if (!dart.isMiss && session.tempDarts.length === 3) {
@@ -55,7 +66,7 @@ export const Shanghai = {
             
             const mSet = new Set([m1, m2, m3]);
             if (mSet.has(1) && mSet.has(2) && mSet.has(3)) {
-                const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);
+                const totalTurn = session.tempDarts.filter(d=>d._isHit).reduce((a,b)=>a+b.points,0);
                 player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
                 
                 return { 
@@ -68,7 +79,7 @@ export const Shanghai = {
 
         // 2. RUNDEN-ENDE CHECK
         if (session.tempDarts.length === 3) {
-             const totalTurn = session.tempDarts.reduce((a,b)=>a+b.points,0);
+             const totalTurn = session.tempDarts.filter(d=>d._isHit).reduce((a,b)=>a+b.points,0);
              player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
 
              if (currentRoundIdx >= session.targets.length - 1) {

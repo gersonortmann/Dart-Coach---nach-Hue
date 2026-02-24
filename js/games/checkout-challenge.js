@@ -66,10 +66,12 @@ export const CheckoutChallenge = {
 
         const currentTarget = session.targets[player._roundIdx];
         const val = dart.points;
-        const doubleOutRequired = (session.settings.doubleOut !== false); // Default true
+        const doubleOutRequired = (session.settings.doubleOut !== false);
         const isDouble = (dart.multiplier === 2);
         const newResidual = player._residual - val;
 
+        // _isHit: Dart hat den Restwert sauber reduziert (kein Bust, kein Miss)
+        dart._isHit = !dart.isMiss && newResidual >= 0;
         session.tempDarts.push(dart);
 	
         // 1. CHECKOUT GESCHAFFT (WIN)
