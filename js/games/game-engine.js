@@ -278,6 +278,10 @@ export const GameEngine = {
         if (result.overlay && !_applyingHeldDarts && result.action === 'BUST') {
             UI.showOverlay(result.overlay.text, result.overlay.type);
         }
+        // NEXT_TURN mit Overlay (z.B. BUST/CHECK in Checkout Challenge)
+        if (result.overlay && !_applyingHeldDarts && result.action === 'NEXT_TURN') {
+            UI.showOverlay(result.overlay.text, result.overlay.type);
+        }
 
         let overlayMs = 1200;
         try { overlayMs = Management.getSettings().overlayDuration || 1200; } catch(e) {}

@@ -36,10 +36,12 @@ const CATEGORIES = [
 
 const VARIANTS = {
     'x01':              [{ v:'all',l:'Alle' },{ v:'301',l:'301' },{ v:'501',l:'501' },{ v:'701',l:'701' }],
-    'cricket':          [{ v:'all',l:'Alle' },{ v:'nolimit',l:'Kein Limit' },{ v:'20',l:'20 Runden' },{ v:'10',l:'10 Runden' }],
+    'cricket':          [{ v:'all',l:'Alle' },{ v:'nolimit',l:'Kein Limit' },{ v:'20',l:'20 Runden' },{ v:'10',l:'10 Runden' },{ v:'mark21',l:'Mark 21' }],
     'shanghai':         [{ v:'all',l:'Alle' },{ v:'7',l:'7 Runden' },{ v:'20',l:'20 Runden' }],
     'around-the-board': [{ v:'all',l:'Alle' },{ v:'full',l:'Komplett' },{ v:'double',l:'Doubles' },{ v:'triple',l:'Triples' }],
     'scoring-drill':    [{ v:'all',l:'Alle' },{ v:'33',l:'33 Darts' },{ v:'66',l:'66 Darts' },{ v:'99',l:'99 Darts' }],
+    'halve-it':          [{ v:'all',l:'Alle' },{ v:'short',l:'Short' },{ v:'standard',l:'Standard' },{ v:'long',l:'Long' }],
+    'checkout-challenge':[{ v:'all',l:'Alle' },{ v:'10',l:'10 Checks' },{ v:'20',l:'20 Checks' },{ v:'30',l:'30 Checks' }],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -231,9 +233,9 @@ export const Stats = {
             case 'around-the-board':   return StatsService.getAtcStats(_playerId, _days, _variant);
             case 'shanghai':           return StatsService.getShanghaiStats(_playerId, _days, _variant);
             case 'bobs27':             return StatsService.getBobs27Stats(_playerId, _days);
-            case 'halve-it':           return StatsService.getHalveItStats(_playerId, _days);
+            case 'halve-it':           return StatsService.getHalveItStats(_playerId, _days, _variant);
             case 'scoring-drill':      return StatsService.getScoringDrillStats(_playerId, _days, _variant);
-            case 'checkout-challenge': return StatsService.getCheckoutChallengeStats(_playerId, _days);
+            case 'checkout-challenge': return StatsService.getCheckoutChallengeStats(_playerId, _days, _variant);
             default: return null;
         }
     },
@@ -490,23 +492,70 @@ export const Stats = {
 
     _roundBreakdownHTML(m) {
         if (!m.roundBreakdown || m.roundBreakdown.length === 0) return null;
+
+        const isCricket = typeof m.marks !== 'undefined'; // Cricket-Einträge haben 'marks' pro Runde
+        const CRICKET_TARGETS = new Set([15, 16, 17, 18, 19, 20, 25]);
+
         return `<div class="breakdown-table">
             ${m.roundBreakdown.map(r => {
-                const dartsStr = (r.darts || [])
-                    .map(d => d.isMiss ? '<span class="bd-miss">✗</span>' : `<span class="bd-hit">${d.segment || d.points || '?'}</span>`)
-                    .join(' ');
-                const targetLabel = r.target !== undefined ? `<span class="bd-target-val">${r.target}</span>` : '';
-                const hitLabel    = r.hit !== undefined ? (r.hit ? '✅' : '❌') : '';
-                const halvLabel   = r.wasHalved ? ' <span class="bd-halved">halved</span>' : '';
-                const scoreStr    = r.score !== undefined ? `+${r.score}` : '';
-                const totalStr    = r.totalAfter !== undefined ? `= ${r.totalAfter}` : '';
+                // ── Darts rendern ──────────────────────────────────────────
+                const dartsStr = (r.darts || []).map(d => {
+                    if (d.isMiss) return `<span class="bd-miss">✗</span>`;
+
+                    const label = d.segment || String(d.base || '?');
+
+                    if (isCricket) {
+                        // Cricket: grün = Ziel getroffen, gedimmt = anderes Feld
+                        const isCricketHit = CRICKET_TARGETS.has(d.base);
+                        return isCricketHit
+                            ? `<span class="bd-hit">${label}</span>`
+                            : `<span class="bd-off">${label}</span>`;
+                    } else {
+                        // Andere Spiele: _isHit-Flag oder !isMiss
+                        const isHit = d._isHit ?? !d.isMiss;
+                        return isHit
+                            ? `<span class="bd-hit">${label}</span>`
+                            : `<span class="bd-miss">✗</span>`;
+                    }
+                }).join(' ');
+
+                // ── Spalteninhalte je nach Spieltyp ───────────────────────
+                let col2 = '';   // Ziel / Hit-Icon
+                let col4 = '';   // Score-Change
+                let col5 = '';   // Laufend
+
+                if (isCricket) {
+                    // Marks dieser Runde als kleine Kreise
+                    const markDots = r.marks > 0
+                        ? `<span class="bd-marks">${'●'.repeat(Math.min(r.marks, 9))}</span>`
+                        : '';
+                    col2 = markDots;
+                    col4 = r.score > 0 ? `<span class="bd-score">+${r.score}</span>` : '';
+                    col5 = r.totalAfter !== undefined
+                        ? `<span class="bd-total">= ${r.totalAfter}</span>`
+                        : '';
+                } else {
+                    const targetLabel = r.target !== undefined
+                        ? `<span class="bd-target-val">${r.target}</span>`
+                        : '';
+                    const hitLabel = r.hit !== undefined ? (r.hit ? '✅' : '❌') : '';
+                    const halvLabel = r.wasHalved ? ' <span class="bd-halved">½</span>' : '';
+                    col2 = `${targetLabel}${hitLabel}`;
+                    col4 = (r.score !== undefined && r.score !== 0)
+                        ? `<span class="bd-score">${r.score > 0 ? '+' : ''}${r.score}${halvLabel}</span>`
+                        : halvLabel;
+                    col5 = r.totalAfter !== undefined
+                        ? `<span class="bd-total">= ${r.totalAfter}</span>`
+                        : '';
+                }
+
                 return `
                     <div class="breakdown-row">
                         <span class="bd-idx">#${r.idx}</span>
-                        <span class="bd-target">${targetLabel}${hitLabel}</span>
+                        <span class="bd-target">${col2}</span>
                         <span class="bd-darts">${dartsStr || '—'}</span>
-                        <span class="bd-score">${scoreStr}${halvLabel}</span>
-                        <span class="bd-total">${totalStr}</span>
+                        <span class="bd-score-col">${col4}</span>
+                        <span class="bd-total-col">${col5}</span>
                     </div>`;
             }).join('')}
         </div>`;

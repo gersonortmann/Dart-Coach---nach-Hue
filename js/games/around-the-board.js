@@ -166,7 +166,10 @@ export const AroundTheBoard = {
                 dartPointer++;
                 count++;
                 
-                if (!d.isMiss) {
+                // _isHit = dart hat das korrekte ATB-Ziel getroffen (neues Format)
+                // Fallback auf !d.isMiss für ältere Einträge ohne _isHit
+                const hitTarget = d._isHit ?? !d.isMiss;
+                if (hitTarget) {
                     finished = true;
                     break;
                 }

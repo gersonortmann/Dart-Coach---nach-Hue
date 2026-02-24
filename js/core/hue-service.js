@@ -113,6 +113,10 @@ export const HueService = {
             await this.discoverBridge();
         }
 
+        // Verbindungsstatus IMMER zurücksetzen — muss jede Session neu geprüft werden.
+        // Verhindert Fehler wenn Hue Bridge physisch nicht erreichbar war.
+        _hueState.isConnected = false;
+
         if (_hueState.isEnabled && _hueState.bridgeIp) {
             this.checkConnection().then(ok => {
                 if (ok) this.setMood('screen-dashboard');

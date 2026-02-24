@@ -220,6 +220,7 @@
 .stats-variant-bar {
     display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;
 }
+
 .stats-variant-btn {
     background: rgba(255,255,255,0.05); border: 1px solid #444;
     border-radius: 20px; padding: 4px 14px;
@@ -234,7 +235,7 @@
 /* ── Hero Cards Grid ── */
 .stats-hero-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
     width: 100%;
 }
@@ -340,39 +341,57 @@
     grid-template-columns: 48px 1fr auto;
 }
 
-/* ── Match-Row Grids per game type ── */
+/* ── Match-Row Grids per game type ──────────────────────────────────────
+   Prinzip: auto für Datum/Badges, 1fr für alle Metrik-Spalten.
+   justify-items: center → gleichmäßige Zentrierung.
+   .mh-date/.mh-opp überschreiben auf justify-self: start.
+─────────────────────────────────────────────────────────────────────── */
+
 /* X01: date | mode | result | opponents | avg | checkout | bestleg | powers */
 .match-row-inner.mh-x01 {
-    grid-template-columns: 48px 52px 72px 1fr 52px 52px 52px auto;
+    grid-template-columns: auto auto auto minmax(80px, 200px) 1fr 1fr 1fr auto;
+    justify-items: center;
 }
 /* Cricket: date | result | opponents | mpr | marks | rounds */
 .match-row-inner.mh-cricket {
-    grid-template-columns: 48px 72px 1fr 52px 52px 52px;
+    grid-template-columns: auto auto minmax(80px, 200px) 1fr 1fr 1fr;
+    justify-items: center;
 }
-/* Single Training / Shanghai / ATB: date | result | opponents | score | hitrate | sdt/variant */
+/* Single Training / Shanghai: date | result | opponents | score | hitrate | sdt */
 .match-row-inner.mh-single-training,
 .match-row-inner.mh-shanghai {
-    grid-template-columns: 48px 72px 1fr 52px 64px auto;
+    grid-template-columns: auto auto minmax(80px, 200px) 1fr 1fr auto;
+    justify-items: center;
 }
+/* ATB: date | result | direction | darts | hitrate | variant */
 .match-row-inner.mh-around-the-board {
-    grid-template-columns: 48px 72px 1fr 52px 64px auto;
+    grid-template-columns: auto auto minmax(80px, 180px) 1fr 1fr auto;
+    justify-items: center;
 }
 /* Bob's 27: date | result | score | hitrate | rounds */
 .match-row-inner.mh-bobs27 {
-    grid-template-columns: 48px 80px 52px 80px 52px;
+    grid-template-columns: auto auto 1fr 1fr 1fr;
+    justify-items: center;
 }
 /* Halve It: date | mode | score | halvingrate | halvings | perfect */
 .match-row-inner.mh-halve-it {
-    grid-template-columns: 48px 64px 52px 64px 52px 52px;
+    grid-template-columns: auto auto 1fr 1fr 1fr 1fr;
+    justify-items: center;
 }
 /* Scoring Drill: date | limit | score | avg | powers */
 .match-row-inner.mh-scoring-drill {
-    grid-template-columns: 48px 64px 52px 52px auto;
+    grid-template-columns: auto auto 1fr 1fr auto;
+    justify-items: center;
 }
 /* Checkout Challenge: date | difficulty | rate | hit/total | avgdpc | score */
 .match-row-inner.mh-checkout-challenge {
-    grid-template-columns: 48px 80px 64px 64px 80px 52px;
+    grid-template-columns: auto auto 1fr 1fr 1fr 1fr;
+    justify-items: center;
 }
+
+/* Datum und Gegner-Text linksbündig halten */
+.match-row-inner .mh-date,
+.match-row-inner .mh-opp { justify-self: start; }
 
 /* On mobile: collapse to 2-column flex-like grid */
 @media (max-width: 600px) {
@@ -389,11 +408,11 @@
 
 /* Match-Row Body (Runden-Breakdown) */
 .match-row-body {
-    display: none; padding: 0 12px;
+    display: none; padding: 12px 16px 16px;
     background: rgba(0,0,0,0.15);
     border-top: 1px solid #222;
 }
-.match-row-body.open { display: block; }
+.match-row-body.open { display: flex; justify-content: center; }
 
 /* ── History Item Felder ── */
 .mh-date  { color: #555; font-size: 0.75rem; white-space: nowrap; min-width: 44px; }
@@ -426,24 +445,38 @@
 .res-loss  { background: rgba(239,68,68,0.2);  color: #ef4444; }
 .res-solo  { background: rgba(99,102,241,0.2); color: #818cf8; }
 
-/* ── Runden-Breakdown ── */
+/* ── Runden-Breakdown ─────────────────────────────────────────────────────
+   Zentriert, ~55% Breite, leicht hellerer Hintergrund als die Match-Row.
+──────────────────────────────────────────────────────────────────────── */
 .breakdown-table {
+    width: 55%; min-width: 360px; max-width: 700px;
     display: flex; flex-direction: column; gap: 3px;
-    padding: 8px 0 10px 0;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #2e2e2e;
+    border-radius: 10px;
+    padding: 10px 14px 12px;
 }
 .breakdown-row {
-    display: grid; grid-template-columns: 28px 80px 1fr 80px 70px;
+    display: grid; grid-template-columns: 28px 56px 1fr 72px 60px;
     gap: 8px; align-items: center;
-    padding: 4px 8px; border-radius: 4px;
+    padding: 4px 6px; border-radius: 5px;
     font-size: 0.78rem;
-    background: rgba(255,255,255,0.02);
+    background: rgba(255,255,255,0.025);
+}
+.breakdown-row:nth-child(even) {
+    background: rgba(255,255,255,0.045);
 }
 .bd-idx    { color: #555; font-size: 0.7rem; }
 .bd-target { color: #aaa; }
 .bd-target-val { font-weight: 700; color: #ccc; }
 .bd-darts  { color: #888; display: flex; gap: 4px; flex-wrap: wrap; }
-.bd-hit    { color: var(--accent-color); font-size: 0.75rem; }
+.bd-hit    { color: var(--accent-color); font-size: 0.75rem; font-weight: 600; }
 .bd-miss   { color: #ef4444; font-size: 0.75rem; }
+.bd-off    { color: #444; font-size: 0.75rem; }           /* Cricket: anderes Feld, nicht Ziel */
+.bd-marks  { color: var(--accent-color); font-size: 0.75rem; letter-spacing: 1px; } /* Cricket: Mark-Dots */
+.bd-score-col { color: #fff; font-weight: 600; }
+.bd-total-col { color: #888; text-align: right; }
+/* Legacy aliases */
 .bd-score  { color: #fff; font-weight: 600; }
 .bd-halved { color: #ef4444; font-size: 0.7rem; }
 .bd-total  { color: #888; text-align: right; }
@@ -478,7 +511,8 @@
 @media (max-width: 600px) {
     .stats-hero-grid { grid-template-columns: repeat(2, 1fr); }
     .match-row-inner { gap: 4px; }
-    .breakdown-row { grid-template-columns: 24px 60px 1fr 60px; }
+    .breakdown-table { width: 90%; min-width: 0; }
+    .breakdown-row { grid-template-columns: 24px 50px 1fr 60px; }
     .bd-total { display: none; }
 }
 

@@ -131,6 +131,9 @@ function _load() {
                 profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
             };
         }
+        // Verbindungsstatus IMMER zurücksetzen — muss jede Session neu geprüft werden.
+        // Verhindert Fehler wenn WLED physisch ausgeschaltet wurde während isConnected=true gespeichert war.
+        _cfg.isConnected = false;
     } catch {
         _cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     }

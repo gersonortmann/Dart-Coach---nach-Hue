@@ -121,12 +121,13 @@ export const Shanghai = {
      */
     getResultData: function(session, player) {
         const allThrows = player.turns.flatMap(t => t.darts || []);
-        const hits = allThrows.filter(d => !d.isMiss && d.multiplier > 0);
+        // Nur Darts die das Rundziel getroffen haben zählen als "Treffer"
+        const hits = allThrows.filter(d => d._isHit);
         const singles = hits.filter(d => d.multiplier === 1).length;
         const doubles = hits.filter(d => d.multiplier === 2).length;
         const triples = hits.filter(d => d.multiplier === 3).length;
         
-        // Step 7a: Einheitliche Heatmap über dart.segment
+        // Heatmap: alle Darts (auch Nicht-Ziel-Treffer zeigen wo man wirft)
         const heatmap = {};
         allThrows.forEach(d => {
             if (!d.isMiss && d.segment) {
@@ -142,7 +143,7 @@ export const Shanghai = {
                 score: player.currentResidual,
                 hitRate: allThrows.length > 0 ? ((hits.length / allThrows.length) * 100).toFixed(1) + "%" : "0.0%",
                 hits: hits.length,
-                misses: allThrows.length - hits.length
+                misses: allThrows.length - hits.length   // Fehlwürfe = alles ohne _isHit
             },
             distribution: { singles, doubles, triples },
             chart: { labels: chartLabels, values: chartValues },

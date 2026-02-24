@@ -26,6 +26,11 @@ export const Cricket = {
      * 20 Zeilen String-Parsing → 2 Zeilen: dart.base + dart.multiplier
      */
     handleInput: function(session, player, dart) {
+        // ── MARK 21 MODE ─────────────────────────────────────────────────────
+        if (session.settings?.mode === 'mark21') {
+            return this._handleMark21(session, player, dart);
+        }
+
         // Step 7a: Input-Parsing entfällt komplett!
         const targetVal = dart.base;                          // 20, 19, ..., 25 oder 0
         const hits = dart.isMiss ? 0 : dart.multiplier;       // 0, 1, 2, oder 3
@@ -129,6 +134,66 @@ export const Cricket = {
         };
     },
 
+    // ── MARK 21 ──────────────────────────────────────────────────────────────
+    // Alle 7 Felder schließen mit so wenig Darts wie möglich.
+    // Punkte = Gesamtanzahl geworfener Darts (weniger = besser).
+    _handleMark21: function(session, player, dart) {
+        const validTargets = session.targets;
+        const targetVal = dart.base;
+        const hits = dart.isMiss ? 0 : dart.multiplier;
+
+        let overlayText = null;
+        let overlayType = 'score';
+
+        if (validTargets.includes(targetVal) && hits > 0) {
+            const result = this._processMark(session, player, targetVal, hits);
+            if (result.status === 'OPENED') {
+                overlayText = `${targetVal} ✓`;
+                overlayType = 'cricket-open';
+            }
+        }
+
+        // Dart speichern (points = 0, nur Anzahl zählt)
+        dart._isHit = !dart.isMiss && validTargets.includes(dart.base);
+        session.tempDarts.push({ ...dart, points: 0 });
+
+        // Live-Zähler für MPR (Marks pro Dart)
+        const allThrown = [
+            ...player.turns.flatMap(t => t.darts || []),
+            ...session.tempDarts
+        ];
+        const totalDarts = allThrown.length;
+        const totalMarks = allThrown.reduce((a, d) => {
+            return a + ((!d.isMiss && validTargets.includes(d.base)) ? (d.multiplier || 0) : 0);
+        }, 0);
+        player.liveMpr = totalDarts > 0 ? ((totalMarks / totalDarts) * 3).toFixed(2) : '0.00';
+        // Score = Anzahl geworfener Darts insgesamt
+        player.currentResidual = totalDarts;
+
+        // Win: alle Felder auf 3 Marks gesetzt
+        if (this._areAllClosed(player)) {
+            this._logTurn(session, player);
+            return { action: 'WIN_MATCH', overlay: { text: 'FERTIG!', type: 'check' }, suppressModal: true };
+        }
+
+        // Rundenende
+        if (session.tempDarts.length >= 3) {
+            this._logTurn(session, player);
+            const anyHit = session.tempDarts.some(d => !d.isMiss && validTargets.includes(d.base));
+            if (!anyHit && !overlayText) { overlayText = 'MISS'; overlayType = 'miss'; }
+            return {
+                action: 'NEXT_TURN',
+                overlay: overlayText ? { text: overlayText, type: overlayType } : null,
+                delay: overlayText ? 1200 : 500
+            };
+        }
+
+        return {
+            action: 'CONTINUE',
+            overlay: overlayText ? { text: overlayText, type: overlayType } : null
+        };
+    },
+
     _logTurn: function(session, player) {
         const turnTotal = session.tempDarts.reduce((a, b) => a + b.points, 0);
         player.turns.push({
@@ -193,6 +258,14 @@ export const Cricket = {
     },
 
     handleWinLogik: function(session, player, result) {
+        if (session.settings?.mode === 'mark21') {
+            const darts = player.turns.reduce((a, t) => a + (t.darts?.length || 0), 0);
+            return {
+                messageTitle: 'MARK 21 GESCHAFFT!',
+                messageBody: `${player.name} hat alle Felder in ${darts} Darts geschlossen!`,
+                nextActionText: 'STATISTIK'
+            };
+        }
         return {
             messageTitle: "CRICKET MASTER!",
             messageBody: `${player.name} gewinnt mit ${player.currentResidual} Punkten!`,
@@ -205,6 +278,7 @@ export const Cricket = {
      * Distribution nutzt dart.multiplier statt d.hits / d.val Parsing.
      */
     getResultData: function(session, player) {
+        const CRICKET_TARGETS = new Set([15, 16, 17, 18, 19, 20, 25]);
         let totalMarks = 0;
         let totalDarts = 0;
         let distribution = { singles: 0, doubles: 0, triples: 0 };
@@ -216,16 +290,18 @@ export const Cricket = {
                     turn.darts.forEach(d => {
                         totalDarts++;
                         
-                        const hits = d.isMiss ? 0 : d.multiplier;
+                        // Nur Marks auf Cricket-Zielen zählen (15-20, Bull)
+                        const isValidTarget = !d.isMiss && CRICKET_TARGETS.has(d.base);
+                        const hits = isValidTarget ? (d.multiplier || 0) : 0;
 
-                        if (hits > 0 && d.base > 0) {
+                        if (hits > 0) {
                             totalMarks += hits;
                             if(hits === 1) distribution.singles++;
                             else if(hits === 2) distribution.doubles++;
                             else if(hits === 3) distribution.triples++;
                         }
 
-                        // Einheitliche Heatmap über dart.segment
+                        // Heatmap zeigt wo ALLE Darts landeten
                         if (!d.isMiss && d.segment) {
                              heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
                         }

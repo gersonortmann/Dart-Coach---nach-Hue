@@ -378,10 +378,14 @@ export const Game = {
         let guide = dartsLeft > 0 ? GameEngine.getCheckoutGuide(player.currentResidual, dartsLeft) : "";
         
         if(guide) { 
-            hintContainer.innerText = guide; 
+            hintContainer.innerText = guide;
+            hintContainer.style.visibility = '';
             hintContainer.classList.remove('hidden'); 
         } else {
-            hintContainer.classList.add('hidden');
+            // Platz reservieren aber unsichtbar → kein Layout-Sprung
+            hintContainer.innerText = '\u00A0';
+            hintContainer.classList.remove('hidden');
+            hintContainer.style.visibility = 'hidden';
         }
         
         // Turn Score
@@ -523,10 +527,10 @@ export const Game = {
             
         let currentRoundIndex = player._roundIdx || 0;
 
-        // 🔍 FIX: "Time Machine" für den Overlay-Moment
-        // Wenn Darts im Speicher liegen (tempDarts) UND die Strategie schon auf die nächste Runde geschaltet hat (roundIdx > 0),
-        // kann es sein, dass wir rechnerisch im "Niemandsland" sind (Neues Ziel minus Alte Darts = Negativ).
-        if (session.tempDarts && session.tempDarts.length > 0 && currentRoundIndex > 0) {
+        // 🔍 FIX: "Time Machine" nur im Overlay-Moment (alle 3 Darts geworfen)
+        // Wenn Darts noch im Speicher liegen UND die Strategie bereits auf die nächste Runde geschaltet hat,
+        // den Display noch auf die alte Runde zeigen.
+        if (session.tempDarts && session.tempDarts.length === 3 && currentRoundIndex > 0) {
             const prevTarget = targets[currentRoundIndex - 1];
             const prevRes = prevTarget - currentTurnScore;
             
@@ -714,8 +718,11 @@ export const Game = {
             targetValEl.innerText = t === 25 ? 'BULL' : t;
         }
 
-        hintContainer.innerText = `Runde: ${currentTargetIndex + 1} / ${session.targets.length}`;
-        hintContainer.classList.remove('hidden');
+        // Rundenanzahl im hint-Container UND im Label
+        const shRound = Math.min(currentTargetIndex + 1, session.targets.length);
+        document.getElementById('lbl-target-desc').innerText = `Runde ${shRound} / ${session.targets.length}`;
+        hintContainer.innerText = '';
+        hintContainer.classList.add('hidden');
 
         // Live Aufnahme-Punkte (nur Treffer auf aktuelles Ziel)
         const shTurnScore = (session.tempDarts || []).filter(d => d._isHit).reduce((a,b) => a + b.points, 0);

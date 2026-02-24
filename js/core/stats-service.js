@@ -258,13 +258,21 @@ export const StatsService = {
             const resultLabel = (stats.summary) ? "FINISHED" : "ABORT";
             const resultClass = "res-win";
 
+            // Runden-Breakdown aus turns aufbauen
+            const roundBreakdown = (game.turns || []).map((t, i) => ({
+                idx:    i + 1,
+                score:  t.hits > 0 ? `${t.hits} Hit` : '',
+                darts:  t.darts || [],
+            }));
+
             matchHistoryDetails.push({
                 date: this._formatDate(game.date, days),
                 opponents: dirDisplay,
                 resultLabel, resultClass,
                 variant: varDisplay,
                 darts: dartsNeeded,
-                hitRate: summary.hitRate || '-'
+                hitRate: summary.hitRate || '-',
+                roundBreakdown,
             });
         });
 
@@ -359,7 +367,13 @@ export const StatsService = {
                 opponents: opponents.length > 0 ? opponents.join(", ") : `Solo (${rounds} R.)`,
                 resultLabel, resultClass,
                 s: agg.singles, d: agg.doubles, t: agg.triples,
-                hitRate: matchHitRate
+                hitRate: matchHitRate,
+                roundBreakdown: (game.turns || []).map((t, i) => ({
+                    idx:   i + 1,
+                    target: i + 1, // Shanghai: Runde i = Zahl i+1
+                    score: t.score ?? 0,
+                    darts: t.darts || [],
+                })),
             });
         });
 
@@ -388,95 +402,121 @@ export const StatsService = {
         const filteredHistory = this._getFilteredHistory(playerId, 'cricket', days);
         if (!filteredHistory || filteredHistory.length === 0) return null;
 
+        // Alles aus Rohdaten berechnen — robust für alte & neue History-Einträge
+        const CRICKET_TARGETS = new Set([15, 16, 17, 18, 19, 20, 25]);
+
         let totalGames = 0;
         let totalMarks = 0;
         let totalDarts = 0;
-        let bestMPR = 0;
-        
+        let bestMPR    = 0;
         let dist = { singles: 0, doubles: 0, triples: 0 };
         const heatmap = {};
         const matchHistoryDetails = [];
         const mprTrend = [];
-        const labels = [];
+        const labels   = [];
 
         filteredHistory.forEach(game => {
-            const settings = game.settings || {};
-            const roundsLimit = settings.spRounds || 0; 
-            
+            const settings    = game.settings || {};
+            const roundsLimit = settings.spRounds || 0;
+            const stats       = game.stats || {};
+
             if (variant !== 'all') {
                 if (variant === 'nolimit' && (roundsLimit == 20 || roundsLimit == 10)) return;
-                if (variant === '20' && roundsLimit != 20) return;
-                if (variant === '10' && roundsLimit != 10) return;
+                if (variant === '20'      && roundsLimit != 20) return;
+                if (variant === '10'      && roundsLimit != 10) return;
+                if (variant === 'mark21'  && settings.mode !== 'mark21') return;
+                if (variant !== 'mark21'  && variant !== 'nolimit' && settings.mode === 'mark21') return;
             }
 
-            const stats = game.stats || {};
-            const summary = stats.summary || {}; 
-            
-            let mpr = parseFloat(summary.mpr || stats.mpr || 0);
-            let marks = parseInt(summary.totalMarks || stats.totalMarks || 0);
-            let rounds = parseInt(summary.rounds || stats.rounds || 0);
-            let score = parseInt(summary.score || stats.score || 0);
+            // ── Aus Rohdaten neu berechnen ────────────────────────────────
+            const turns = game.turns || [];
+            let gameMarks = 0;
+            let gameDarts = 0;
+            let gameScore = 0;
+            const gameDist = { singles: 0, doubles: 0, triples: 0 };
 
-            if (marks > 0) {
-                totalGames++; 
-                if(mpr > bestMPR) bestMPR = mpr;
-                totalMarks += marks;
-                if(mpr > 0) totalDarts += (marks / mpr) * 3;
+            // Für Breakdown: laufenden Score akkumulieren
+            let runningScore = 0;
+            const roundBreakdown = turns.map((turn, i) => {
+                let turnMarks = 0;
+                (turn.darts || []).forEach(d => {
+                    gameDarts++;
+                    if (!d.isMiss && d.segment) {
+                        heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
+                    }
+                    if (!d.isMiss && CRICKET_TARGETS.has(d.base)) {
+                        const m = d.multiplier || 0;
+                        gameMarks += m;
+                        turnMarks += m;
+                        if (m === 1) gameDist.singles++;
+                        else if (m === 2) gameDist.doubles++;
+                        else if (m === 3) gameDist.triples++;
+                    }
+                });
+                const turnScore = turn.score ?? 0;
+                runningScore += turnScore;
+                gameScore += turnScore;
+                return {
+                    idx:       i + 1,
+                    darts:     turn.darts || [],
+                    marks:     turnMarks,
+                    score:     turnScore,
+                    totalAfter: runningScore,
+                };
+            });
 
-                const d = stats.distribution || summary.distribution || {};
-                dist.singles += (d.singles || 0);
-                dist.doubles += (d.doubles || 0);
-                dist.triples += (d.triples || 0);
+            const gameMPR = gameDarts > 0 ? (gameMarks / gameDarts) * 3 : 0;
+            const rounds  = turns.length;
 
-                // Heatmap durchleiten (vorberechnet)
-                const h = stats.heatmap || summary.heatmap;
-                if (h) {
-                    Object.entries(h).forEach(([k, v]) => { heatmap[k] = (heatmap[k] || 0) + v; });
-                }
-                
-                mprTrend.push(mpr);
+            // Zur Gesamtstatistik addieren (nur wenn Darts geworfen wurden)
+            if (gameDarts > 0) {
+                totalGames++;
+                totalMarks += gameMarks;
+                totalDarts += gameDarts;
+                if (gameMPR > bestMPR) bestMPR = gameMPR;
+                dist.singles += gameDist.singles;
+                dist.doubles += gameDist.doubles;
+                dist.triples += gameDist.triples;
+                mprTrend.push(parseFloat(gameMPR.toFixed(2)));
                 labels.push(this._formatDate(game.date, days));
             }
 
-            const opponents = (settings.opponents) ? settings.opponents : [];
-            let resultLabel = "Solo"; 
-            let resultClass = "res-solo";
-            let opponentText = "Solo";
+            // ── Result-Label ──────────────────────────────────────────────
+            const opponents = settings.opponents || [];
+            const isMatch   = (typeof stats.isWinner === 'boolean') || opponents.length > 0;
+            let resultLabel = 'Solo';
+            let resultClass = 'res-solo';
+            let opponentText = roundsLimit ? `Solo (${roundsLimit} R.)` : 'Solo (No Limit)';
 
-            const isMatch = (typeof stats.isWinner === 'boolean');
+            if (opponents.length > 0) opponentText = opponents.join(', ');
 
-            if (opponents.length > 0) {
-                opponentText = opponents.join(", ");
-            } else if (isMatch) {
-                opponentText = "Match";
-            } else {
-                opponentText = roundsLimit ? `Solo (${roundsLimit} R.)` : "Solo (No Limit)";
-            }
-
-            if (isMatch || opponents.length > 0) {
-                 if (stats.isWinner) { resultLabel = "SIEG"; resultClass = "res-win"; }
-                 else { resultLabel = "NIEDERLAGE"; resultClass = "res-loss"; }
+            if (isMatch) {
+                if (stats.isWinner) { resultLabel = 'SIEG';        resultClass = 'res-win';  }
+                else                { resultLabel = 'NIEDERLAGE';  resultClass = 'res-loss'; }
             }
 
             matchHistoryDetails.push({
                 date: this._formatDate(game.date, days),
                 opponents: opponentText,
                 resultLabel, resultClass,
-                mpr: marks > 0 ? mpr.toFixed(2) : '-',
-                marks, rounds, score
+                mpr:    gameDarts > 0 ? gameMPR.toFixed(2) : '-',
+                marks:  gameMarks,
+                rounds,
+                score:  gameScore,
+                roundBreakdown,
             });
         });
 
         if (totalGames === 0 && matchHistoryDetails.length === 0) return null;
 
-        const globalMPR = totalDarts > 0 ? ((totalMarks / totalDarts) * 3).toFixed(2) : "0.00";
+        const globalMPR = totalDarts > 0 ? ((totalMarks / totalDarts) * 3).toFixed(2) : '0.00';
 
         return {
-            summary: { games: totalGames, avgMPR: globalMPR, bestMPR: bestMPR.toFixed(2), totalMarks },
+            summary:      { games: totalGames, avgMPR: globalMPR, bestMPR: bestMPR.toFixed(2), totalMarks },
             distribution: dist,
-            heatmap: heatmap,
-            matches: matchHistoryDetails.reverse(),
-            chart: { labels, values: mprTrend }
+            heatmap,
+            matches:      matchHistoryDetails.reverse(),
+            chart:        { labels, values: mprTrend },
         };
     },
     
@@ -527,7 +567,13 @@ export const StatsService = {
                 opponents: opponents.length > 0 ? opponents.join(", ") : "Solo Training",
                 resultLabel, resultClass,
                 s: agg.singles, d: agg.doubles, t: agg.triples,
-                hitRate: matchHitRate
+                hitRate: matchHitRate,
+                roundBreakdown: (game.turns || []).map((t, i) => ({
+                    idx:    i + 1,
+                    target: game.targets?.[i] ?? (i < 20 ? i + 1 : 25),
+                    score:  t.score ?? 0,
+                    darts:  t.darts || [],
+                })),
             });
         });
 
@@ -582,6 +628,17 @@ export const StatsService = {
             totalDartsThrown += matchDarts;
             
             const matchHitRate = matchDarts > 0 ? ((matchHits / matchDarts) * 100).toFixed(1) + '%' : '0.0%';
+
+            // Runden-Breakdown: Zielwert, Hit/Miss, Score-Änderung
+            const roundBreakdown = (game.turns || []).map((t, i) => ({
+                idx:        i + 1,
+                target:     t.target ?? i + 1,
+                hit:        (t.hits ?? 0) > 0,
+                score:      t.change ?? 0,
+                totalAfter: t.score ?? 0,
+                darts:      t.darts || [],
+            }));
+
             matchHistoryDetails.push({
                 date: this._formatDate(game.date, days),
                 score: finalScore,
@@ -589,7 +646,8 @@ export const StatsService = {
                 resultClass: survived ? "res-win" : "res-loss",
                 hitRate: matchHitRate,
                 doublesHit: matchHits,
-                rounds: game.turns ? game.turns.length : 0
+                rounds: game.turns ? game.turns.length : 0,
+                roundBreakdown,
             });
         });
 
@@ -616,15 +674,21 @@ export const StatsService = {
     // ─────────────────────────────────────────────────────────────────────────
     //  HALVE IT
     // ─────────────────────────────────────────────────────────────────────────
-    getHalveItStats: function(playerId, days = 30) {
+    getHalveItStats: function(playerId, days = 30, variant = 'all') {
         const filteredHistory = this._getFilteredHistory(playerId, 'halve-it', days);
         if (!filteredHistory || filteredHistory.length === 0) return null;
 
         let totalGames = 0, scoreSum = 0, bestScore = 0;
         let totalHalvings = 0, totalRounds = 0, totalPerfect = 0;
         const matchHistoryDetails = [];
+        const chartLabels = [];
+        const chartValues = [];
 
         filteredHistory.forEach(game => {
+            // Varianten-Filter nach Modus (short / standard / long)
+            const mode = game.settings?.mode || 'standard';
+            if (variant !== 'all' && mode !== variant) return;
+
             totalGames++;
             const sm = game.stats?.summary || game.stats || {};
             const score       = sm.score       ?? game.totalScore ?? 0;
@@ -641,7 +705,6 @@ export const StatsService = {
             const halvingRate = rounds > 0
                 ? ((halvings / rounds) * 100).toFixed(0) + '%' : '0%';
 
-            // Runden-Breakdown für aufklappbare Historie
             const roundBreakdown = (game.turns || []).map((t, i) => ({
                 idx: i + 1,
                 target: game.targets?.[i] ?? '?',
@@ -651,10 +714,13 @@ export const StatsService = {
                 darts: t.darts || []
             }));
 
+            chartLabels.push(this._formatDate(game.date, days));
+            chartValues.push(score);
+
             matchHistoryDetails.push({
                 date:       this._formatDate(game.date, days),
                 score, halvings, halvingRate, perfect, rounds,
-                mode:       game.settings?.mode || 'standard',
+                mode,
                 roundBreakdown,
             });
         });
@@ -672,10 +738,7 @@ export const StatsService = {
                 perfectRounds: totalPerfect,
             },
             matches: matchHistoryDetails.reverse(),
-            chart: {
-                labels:    filteredHistory.map(h => this._formatDate(h.date, days)),
-                values:    filteredHistory.map(h => h.stats?.summary?.score ?? h.stats?.totalScore ?? h.totalScore ?? 0),
-            },
+            chart: { labels: chartLabels, values: chartValues },
         };
     },
 
@@ -752,7 +815,7 @@ export const StatsService = {
     // ─────────────────────────────────────────────────────────────────────────
     //  CHECKOUT CHALLENGE
     // ─────────────────────────────────────────────────────────────────────────
-    getCheckoutChallengeStats: function(playerId, days = 30) {
+    getCheckoutChallengeStats: function(playerId, days = 30, variant = 'all') {
         const filteredHistory = this._getFilteredHistory(playerId, 'checkout-challenge', days);
         if (!filteredHistory || filteredHistory.length === 0) return null;
 
@@ -762,6 +825,15 @@ export const StatsService = {
         const matchHistoryDetails = [];
 
         filteredHistory.forEach(game => {
+            const rounds = game.settings?.rounds ?? (game.targets?.length ?? 0);
+
+            // Varianten-Filter nach Rundenanzahl
+            if (variant !== 'all') {
+                if (variant === '10' && rounds != 10) return;
+                if (variant === '20' && rounds != 20) return;
+                if (variant === '30' && rounds != 30) return;
+            }
+
             totalGames++;
             const sm   = game.stats?.summary || game.stats || {};
             const score       = sm.score       ?? game.totalScore ?? 0;
@@ -809,13 +881,11 @@ export const StatsService = {
             },
             matches: matchHistoryDetails.reverse(),
             chart: {
-                labels: filteredHistory.map(h => this._formatDate(h.date, days)),
-                values: filteredHistory.map(h => {
-                    const sm = h.stats?.summary || h.stats || {};
-                    const hit = sm.checkoutsHit ?? 0;
-                    const tot = sm.checkoutsTotal ?? h.targets?.length ?? 1;
-                    return tot > 0 ? Math.round((hit / tot) * 100) : 0;
-                }),
+                labels: matchHistoryDetails.map(m => m.date).reverse(),
+                values: matchHistoryDetails.map(m => {
+                    const tot = m.total ?? 1;
+                    return tot > 0 ? Math.round((m.hit / tot) * 100) : 0;
+                }).reverse(),
             },
         };
     },

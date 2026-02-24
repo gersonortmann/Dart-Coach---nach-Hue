@@ -31,6 +31,9 @@ export const X01 = {
         const settings = session.settings;
         const result = this._processThrow(player, dart, settings);
 
+        // _isHit: Dart hat anrechenbare Punkte erzielt (kein Bust, kein Double-In-Miss)
+        dart._isHit = result.points > 0;
+
         // Dart speichern: points = angerechnete Punkte (0 bei Bust/Double-In-Miss)
         session.tempDarts.push({ ...dart, points: result.points });
         
@@ -166,19 +169,50 @@ export const X01 = {
         const opponent = session.players.find(p => p.id !== player.id);
         const scoreDisplay = `${player.legsWon}:${opponent ? opponent.legsWon : 0}`;
         const isMatch = (result.action === 'WIN_MATCH');
+
+        // ── Leg-Statistik für Modal ────────────────────────────────────────
+        const _legStats = (p) => {
+            const darts = p.turns.flatMap(t => t.darts || []);
+            const pts   = p.turns.reduce((a,t) => a + (t.bust ? 0 : (t.score||0)), 0);
+            const avg   = darts.length > 0 ? ((pts / darts.length) * 3).toFixed(1) : '-';
+            const f9d   = darts.slice(0, 9);
+            const f9pts = f9d.reduce((a,d) => a + (d.points||0), 0);
+            const f9    = f9d.length > 0 ? ((f9pts / f9d.length) * 3).toFixed(1) : '-';
+            return { avg, f9 };
+        };
+
+        const allPlayers = session.players;
+        const statsRows = allPlayers.map(p => {
+            const s = _legStats(p);
+            return `<tr style="color:${p.id===player.id?'var(--accent-color)':'#ccc'}">
+                <td style="text-align:left;padding:4px 8px;">${p.name}</td>
+                <td style="padding:4px 12px;">${s.avg}</td>
+                <td style="padding:4px 8px;">${s.f9}</td>
+            </tr>`;
+        }).join('');
+
+        const statsTable = allPlayers.length > 0 ? `
+            <table style="width:100%;margin-top:12px;border-collapse:collapse;font-size:0.9rem;">
+                <thead><tr style="color:#555;font-size:0.75rem;">
+                    <th style="text-align:left;padding:2px 8px;"></th>
+                    <th style="padding:2px 12px;">AVG</th>
+                    <th style="padding:2px 8px;">F9</th>
+                </tr></thead>
+                <tbody>${statsRows}</tbody>
+            </table>` : '';
         
         if (session.settings.mode === 'sets') {
              const setScore = `${player.setsWon}:${opponent ? opponent.setsWon : 0}`;
              if (isMatch) {
-                 return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${setScore} Sätze!`, nextActionText: "STATISTIK" };
+                 return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${setScore} Sätze!${statsTable}`, nextActionText: "STATISTIK" };
              }
-             return { messageTitle: "SATZ / LEG", messageBody: `Stand: ${setScore} Sätze (${scoreDisplay} Legs)`, nextActionText: "WEITER" };
+             return { messageTitle: "SATZ / LEG", messageBody: `Stand: ${setScore} Sätze (${scoreDisplay} Legs)${statsTable}`, nextActionText: "WEITER" };
         }
         
         if (isMatch) {
-            return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${scoreDisplay}!`, nextActionText: "STATISTIK" };
+            return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${scoreDisplay}!${statsTable}`, nextActionText: "STATISTIK" };
         }
-        return { messageTitle: "LEG GEWONNEN!", messageBody: `${player.name} checkt zum ${scoreDisplay}!`, nextActionText: "NÄCHSTES LEG" };
+        return { messageTitle: "LEG GEWONNEN!", messageBody: `${player.name} checkt zum ${scoreDisplay}!${statsTable}`, nextActionText: "NÄCHSTES LEG" };
     },
 
     /**

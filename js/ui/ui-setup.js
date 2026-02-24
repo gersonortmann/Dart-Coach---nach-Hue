@@ -505,29 +505,36 @@ function _renderCricketOptions(container) {
     const rowMode = document.createElement('div'); 
     rowMode.className = 'opt-row-big';
     
+    const isM21 = cricketSettings.mode === 'mark21';
+
     const btnStd = document.createElement('button');
     btnStd.className = 'opt-btn-big ' + (cricketSettings.mode === 'standard' ? 'active' : '');
     btnStd.innerText = 'Standard';
+    btnStd.disabled = isM21;
+    if (isM21) btnStd.style.opacity = '0.35';
     btnStd.onclick = () => { 
         cricketSettings.mode = 'standard'; 
         _renderSetupOptions(); 
     };
     rowMode.appendChild(btnStd);
 
-    const btnCut = document.createElement('button');
-    btnCut.className = 'opt-btn-big';
-    btnCut.innerText = 'Cut Throat';
-    btnCut.disabled = true;
-    btnCut.style.opacity = '0.5';
-    btnCut.title = 'Kommt in Version 2.1';
-    rowMode.appendChild(btnCut);
+    const btnM21 = document.createElement('button');
+    btnM21.className = 'opt-btn-big ' + (isM21 ? 'active' : '');
+    btnM21.innerText = '🎯 Mark 21';
+    btnM21.title = 'Alle 7 Felder in so wenig Darts wie möglich schließen (Solo)';
+    btnM21.onclick = () => { 
+        cricketSettings.mode = isM21 ? 'standard' : 'mark21';
+        _renderSetupOptions(); 
+    };
+    rowMode.appendChild(btnM21);
 
     grpMode.appendChild(rowMode);
     container.appendChild(grpMode);
 
+    // Rundenlimit nur im Standard-Modus verfügbar
     const grpRounds = document.createElement('div'); 
     grpRounds.className = 'opt-group-big';
-    grpRounds.innerHTML = '<span class="opt-label-big">Rundenlimit (1 Player)</span>';
+    grpRounds.innerHTML = `<span class="opt-label-big">Rundenlimit (1 Player)</span>`;
     
     const rowRounds = document.createElement('div'); 
     rowRounds.className = 'opt-row-big';
@@ -538,12 +545,16 @@ function _renderCricketOptions(container) {
         { val: 20, label: 'Standard (20)' },
     ];
 
+    rowRounds.style.opacity = isM21 ? '0.35' : '1';
+    rowRounds.style.pointerEvents = isM21 ? 'none' : '';
+
     roundOptions.forEach(opt => {
         const b = document.createElement('button');
         const current = cricketSettings.spRounds !== undefined ? cricketSettings.spRounds : 20;
         
         b.className = 'opt-btn-big ' + (current === opt.val ? 'active' : '');
         b.innerText = opt.label;
+        b.disabled = isM21;
         b.onclick = () => { 
             cricketSettings.spRounds = opt.val; 
             _renderSetupOptions(); 

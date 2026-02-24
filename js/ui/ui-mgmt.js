@@ -1101,6 +1101,15 @@ export const Management = {
                 `)}
 
                 ${ok ? `
+					${this._section('💾 Lichtprofile', `
+                        <div class="mgmt-hint" style="margin-bottom:12px;">Speichere die aktuelle Konfiguration als benanntes Profil – wechsle mit einem Klick z.B. zwischen „Entspannt" und „Party".</div>
+                        <div style="display:flex; gap:8px; margin-bottom:16px;">
+                            <input type="text" id="wled-profile-name" class="mgmt-input" style="flex:1;" placeholder="Profilname …" maxlength="40">
+                            <button id="wled-profile-save" class="mgmt-btn-sm mgmt-btn-accent">💾 Speichern</button>
+                        </div>
+                        <div id="wled-profile-list"></div>
+                    `)}
+					
                     ${this._section('Helligkeit', `
                         <div class="mgmt-field">
                             <div class="mgmt-range-row">
@@ -1120,15 +1129,6 @@ export const Management = {
 
                     ${this._section('Ereignisse & Stimmung', `
                         <div id="wled-config-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;"></div>
-                    `)}
-
-                    ${this._section('💾 Lichtprofile', `
-                        <div class="mgmt-hint" style="margin-bottom:12px;">Speichere die aktuelle Konfiguration als benanntes Profil – wechsle mit einem Klick z.B. zwischen „Entspannt" und „Party".</div>
-                        <div style="display:flex; gap:8px; margin-bottom:16px;">
-                            <input type="text" id="wled-profile-name" class="mgmt-input" style="flex:1;" placeholder="Profilname …" maxlength="40">
-                            <button id="wled-profile-save" class="mgmt-btn-sm mgmt-btn-accent">💾 Speichern</button>
-                        </div>
-                        <div id="wled-profile-list"></div>
                     `)}
                 ` : ''}
             ` : ''}
