@@ -58,22 +58,26 @@ export const Shanghai = {
 			? ((totalHits / allDarts.length) * 100).toFixed(1) + '%'
 			: '0.0%';
 
-        // 1. SHANGHAI CHECK (S-D-T im 3. Dart)
-        if (!dart.isMiss && session.tempDarts.length === 3) {
-            const m1 = session.tempDarts[0].multiplier; 
-            const m2 = session.tempDarts[1].multiplier;
-            const m3 = hitMultiplier;
-            
-            const mSet = new Set([m1, m2, m3]);
-            if (mSet.has(1) && mSet.has(2) && mSet.has(3)) {
-                const totalTurn = session.tempDarts.filter(d=>d._isHit).reduce((a,b)=>a+b.points,0);
-                player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
-                
-                return { 
-                    action: 'WIN_MATCH', 
-                    overlay: { text: 'SHANGHAI!', type: 'check' },
-                    suppressModal: true 
-                };
+        // 1. SHANGHAI CHECK (S-D-T im 3. Dart, alle 3 Darts müssen Zielfeld treffen)
+        if (session.tempDarts.length === 3) {
+            const d1 = session.tempDarts[0];
+            const d2 = session.tempDarts[1];
+            const d3 = session.tempDarts[2];
+            const allOnTarget = d1._isHit && d2._isHit && d3._isHit;
+
+            if (allOnTarget) {
+                const mSet = new Set([d1.multiplier, d2.multiplier, d3.multiplier]);
+                if (mSet.has(1) && mSet.has(2) && mSet.has(3)) {
+                    const totalTurn = session.tempDarts.filter(d => d._isHit).reduce((a, b) => a + b.points, 0);
+                    player.turns.push({ roundIndex: currentRoundIdx, score: totalTurn, darts: [...session.tempDarts] });
+                    player.shanghaiWon = true;
+                    session.shanghaiWinnerId = player.id; // für Result & Historie
+                    return {
+                        action: 'WIN_MATCH',
+                        overlay: { text: 'SHANGHAI!', type: 'check' },
+                        suppressModal: true
+                    };
+                }
             }
         }
 
@@ -101,14 +105,39 @@ export const Shanghai = {
     },
 
     handleWinLogik: function(session, player, result) {
-         if (result.overlay && result.overlay.text === 'SHANGHAI!') {
-             return {
+        const isMultiplayer = session.players.length > 1;
+
+        if (player.shanghaiWon) {
+            if (isMultiplayer) {
+                return {
+                    isMatchOver: true,
+                    messageTitle: 'SHANGHAI! 💎',
+                    messageBody: `${player.name} wirft ein perfektes Shanghai und gewinnt sofort!`,
+                    nextActionText: 'ERGEBNIS'
+                };
+            }
+            return {
+                isMatchOver: true,
                 messageTitle: 'SHANGHAI! 💎',
                 messageBody: `${player.name} wirft ein perfektes Shanghai!`,
                 nextActionText: 'ERGEBNIS'
             };
-         }
-         return {
+        }
+
+        // Normales Spielende – Sieger nach Punkten
+        if (isMultiplayer) {
+            const sorted = [...session.players].sort((a, b) => b.currentResidual - a.currentResidual);
+            const lines = sorted.map((p, i) => `${i + 1}. ${p.name}: ${p.currentResidual} Pts`).join('<br>');
+            session.shanghaiWinnerId = sorted[0].id;
+            return {
+                isMatchOver: true,
+                messageTitle: 'SPIELENDE',
+                messageBody: lines,
+                nextActionText: 'ERGEBNIS'
+            };
+        }
+        return {
+            isMatchOver: true,
             messageTitle: 'SPIELENDE',
             messageBody: `${player.name} beendet mit ${player.currentResidual} Punkten.`,
             nextActionText: 'ERGEBNIS'

@@ -4,7 +4,7 @@ export const CheckoutChallenge = {
 
     config: {
         hasOptions: true,
-        description: "Checkout Training: Du hast genau 3 Darts pro Zahl. Checkst du, gibt es Punkte. Wenn nicht, kommt sofort die nächste Zahl.",
+        description: "Checkout Training: Checke zufällige Werte. Wähle 1–3 Aufnahmen pro Ziel.",
         mode: 'pro',            
         defaultProInput: true
     },
@@ -52,12 +52,23 @@ export const CheckoutChallenge = {
         
         player._roundIdx = 0;       
         player._residual = targets[0]; 
-        player._startOfTurnRes = targets[0]; 
+        player._startOfTurnRes = targets[0];
+        player._turnOnTarget = 0;   // Welche Aufnahme auf dem aktuellen Ziel (0-basiert)
         player.turns = [];
     },
 
     // ── WURF LOGIK ──
     handleInput(session, player, dart) {
+        // Lazy Apply + Snapshot-Cleanup: am ersten Dart der neuen Aufnahme
+        delete player._completedRoundDisplay; // Time-Machine-Snapshot löschen
+        if (player._pendingCCReset) {
+            const p = player._pendingCCReset;
+            player._residual       = p.residual;
+            player._startOfTurnRes = p.startOfTurnRes;
+            player._turnOnTarget   = p.turnOnTarget;
+            delete player._pendingCCReset;
+        }
+
         // Fallback Safety
         if (player._residual === undefined) {
              player._residual = session.targets[0];
@@ -65,6 +76,7 @@ export const CheckoutChallenge = {
         }
 
         const currentTarget = session.targets[player._roundIdx];
+        const maxTurns = session.settings.turnsPerTarget || 1;
         const val = dart.points;
         const doubleOutRequired = (session.settings.doubleOut !== false);
         const isDouble = (dart.multiplier === 2);
@@ -74,23 +86,40 @@ export const CheckoutChallenge = {
         dart._isHit = !dart.isMiss && newResidual >= 0;
         session.tempDarts.push(dart);
 	
-        // 1. CHECKOUT GESCHAFFT (WIN)
+        // 1. CHECKOUT GESCHAFFT
         if (newResidual === 0 && (!doubleOutRequired || isDouble)) {
-            // Punkte: Wert des Checkouts + Bonus (5 Punkte pro gespartem Dart)
-            const dartsThrown = session.tempDarts.length;
-            const bonus = (3 - dartsThrown) * 5; 
+            // Bonus: gespartes Darts über ALLE Aufnahmen auf dieses Ziel
+            const totalMaxDarts = maxTurns * 3;
+            const totalUsedDarts = (player._turnOnTarget * 3) + session.tempDarts.length;
+            const bonus = (totalMaxDarts - totalUsedDarts) * 5;
             
-            player.score += (currentTarget + bonus);
+            player.score += (currentTarget + Math.max(0, bonus));
             player.checkoutsHit++;
             
-            this._saveTurn(player, session.tempDarts, player._roundIdx);
+            this._saveTurn(player, session.tempDarts, player._roundIdx, true);
             
             return this._nextTarget(session, player, { text: 'CHECK', type: 'check' });
         }
 
-        // 2. BUST (Überworfen oder Rest 1)
-        if (newResidual <= 1) {
+        // 2. BUST (Überworfen oder Rest 1 bei Double Out)
+        if (newResidual < 0 || (doubleOutRequired && newResidual === 1)) {
             this._saveTurn(player, session.tempDarts, player._roundIdx);
+
+            // Noch Aufnahmen übrig? → State-Reset aufschieben (erst nach Correction-Window)
+            if (player._turnOnTarget + 1 < maxTurns) {
+                player._pendingCCReset = {
+                    residual: currentTarget,
+                    startOfTurnRes: currentTarget,
+                    turnOnTarget: player._turnOnTarget + 1
+                };
+                return { 
+                    action: 'NEXT_TURN', 
+                    overlay: { text: 'BUST', type: 'bust' }, 
+                    delay: 1500 
+                };
+            }
+
+            // Letzte Aufnahme → weiter zum nächsten Ziel
             return this._nextTarget(session, player, { text: 'BUST', type: 'bust' });
         }
 
@@ -104,29 +133,48 @@ export const CheckoutChallenge = {
             };
         }
 
-        // 4. AUFNAHME VORBEI OHNE CHECK (FAIL)
+        // 4. AUFNAHME VORBEI OHNE CHECK
         this._saveTurn(player, session.tempDarts, player._roundIdx);
-        return this._nextTarget(session, player, { text: 'MISS', type: 'miss' });
+
+        // Noch Aufnahmen übrig? → Rest bleibt stehen, aufgeschoben anwenden
+        if (player._turnOnTarget + 1 < maxTurns) {
+            player._pendingCCReset = {
+                residual: player._residual,  // Rest bleibt stehen
+                startOfTurnRes: player._residual,
+                turnOnTarget: player._turnOnTarget + 1
+            };
+            return { 
+                action: 'NEXT_TURN', 
+                overlay: null,
+                delay: 800 
+            };
+        }
+
+        // Letzte Aufnahme → weiter zum nächsten Ziel
+        return this._nextTarget(session, player, null);
     },
 
     // Helper: Schaltet auf das nächste Ziel weiter
     _nextTarget(session, player, overlay) {
+        // Snapshot für Renderer (Time Machine): hält alten Zustand während Overlay/Correction.
+        player._completedRoundDisplay = {
+            roundIdx: player._roundIdx,
+            startRes: player._startOfTurnRes,
+        };
+
         player._roundIdx++;
+        player._turnOnTarget = 0;
 
         // Spiel vorbei?
         if (player._roundIdx >= session.targets.length) {
             player.finished = true;
-            
-            // Multiplayer Sync Check
             const allFinished = session.players.every(p => p.finished);
-
             if (allFinished) {
-                return { 
-                    action: 'WIN_MATCH', 
-                    overlay: { text: 'FERTIG', type: 'match-win' } 
+                return {
+                    action: 'WIN_MATCH',
+                    overlay: { text: 'FERTIG', type: 'match-win' }
                 };
             } else {
-                // Warten auf andere
                 return {
                     action: 'NEXT_TURN',
                     overlay: overlay,
@@ -147,11 +195,12 @@ export const CheckoutChallenge = {
         };
     },
 
-    _saveTurn(player, darts, roundIndex) {
-        const score = darts.reduce((a, b) => a + b.points, 0);
+    _saveTurn(player, darts, roundIndex, checked) {
+        const dartScore = darts.reduce((a, b) => a + b.points, 0);
         player.turns.push({
             roundIndex: roundIndex,
-            score: score,
+            score: dartScore,
+            checked: !!checked,
             darts: [...darts]
         });
     },
@@ -196,19 +245,24 @@ export const CheckoutChallenge = {
     },
 
     handleWinLogik(session, player, result) {
+        // Gewinner = höchster Score, unabhängig davon wer WIN_MATCH getriggert hat
+        const winner = [...session.players].sort((a, b) => b.score - a.score)[0] || player;
+        const isMulti = session.players.length > 1;
+        const body = isMulti
+            ? `${winner.name} gewinnt mit ${winner.score} Pts (${winner.checkoutsHit} Checkouts).`
+            : `${winner.name} holt ${winner.score} Punkte (${winner.checkoutsHit} Finishs).`;
         return {
-            messageTitle: "CHALLENGE BEENDET",
-            messageBody: `${player.name} holt ${player.score} Punkte (${player.checkoutsHit} Finishs).`,
-            nextActionText: "STATISTIK"
+            messageTitle: 'CHALLENGE BEENDET',
+            messageBody:  body,
+            nextActionText: 'STATISTIK'
         };
     },
 
     getResultData(session, player) {
         const totalTargets = session.targets.length;
-        // Berechnung der Erfolgsquote
         const rate = totalTargets > 0 ? Math.round((player.checkoutsHit / totalTargets) * 100) : 0;
         
-        // Heatmap Daten sammeln (alle geworfenen Darts)
+        // Heatmap
         const allThrows = player.turns.flatMap(t => t.darts || []);
         const heatmap = {};
         allThrows.forEach(d => {
@@ -217,31 +271,57 @@ export const CheckoutChallenge = {
             }
         });
 
-        // Chart Daten vorbereiten (Kumulierter Score-Verlauf)
-        // Wir gehen durch alle Turns und addieren den Score laufend auf
+        // Chart: Turns nach roundIndex gruppieren (bei Multi-Turn gibt es
+        // mehrere turns mit dem selben roundIndex → zu einem Ziel zusammenfassen)
         let currentTotal = 0;
         const chartValues = [];
         const chartLabels = [];
 
-        // Wir nutzen session.targets für die Labels (z.B. "80", "121", "40")
-        // und player.turns für die Punkte.
-        // Achtung: player.turns enthält nur abgeschlossene Runden.
-        
-        player.turns.forEach((turn, index) => {
-            currentTotal += turn.score; // turn.score ist entweder 0 (Miss) oder Punkte (Check)
-            chartValues.push(currentTotal);
-            
-            // Label ist das Ziel dieser Runde (z.B. "121")
-            const targetVal = session.targets[index]; 
-            chartLabels.push(String(targetVal));
+        // Gruppierung: roundIndex → Array von Turns
+        const grouped = {};
+        player.turns.forEach(turn => {
+            const ri = turn.roundIndex ?? 0;
+            if (!grouped[ri]) grouped[ri] = [];
+            grouped[ri].push(turn);
         });
+
+        // Pro Ziel: Kumulierten Score berechnen
+        for (let i = 0; i < totalTargets; i++) {
+            const turnsForTarget = grouped[i] || [];
+            const wasChecked = turnsForTarget.some(t => t.checked);
+            
+            // Score für dieses Ziel: target + bonus wenn Check, 0 wenn Fail
+            const scoreForTarget = wasChecked ? session.targets[i] : 0;
+            // Bonus berechnen wenn gecheckt
+            if (wasChecked) {
+                const maxTurns = session.settings?.turnsPerTarget || 1;
+                const totalMaxDarts = maxTurns * 3;
+                const totalUsedDarts = turnsForTarget.reduce((a, t) => a + (t.darts?.length || 0), 0);
+                const bonus = Math.max(0, (totalMaxDarts - totalUsedDarts) * 5);
+                currentTotal += scoreForTarget + bonus;
+            }
+            chartValues.push(currentTotal);
+            chartLabels.push(String(session.targets[i] || '?'));
+        }
+
+        // Darts/Checkout: ALLE Darts auf dem Ziel zählen (nicht nur letzte Aufnahme)
+        let dpcSum = 0;
+        for (let i = 0; i < totalTargets; i++) {
+            const turnsForTarget = grouped[i] || [];
+            const wasChecked = turnsForTarget.some(t => t.checked);
+            if (wasChecked) {
+                dpcSum += turnsForTarget.reduce((a, t) => a + (t.darts?.length || 0), 0);
+            }
+        }
+        const avgDpc = player.checkoutsHit > 0 ? (dpcSum / player.checkoutsHit).toFixed(1) : '-';
 
         return {
             summary: {
-                totalScore: player.score,        // Haupt-Score
+                totalScore: player.score,
                 checkoutsHit: player.checkoutsHit,
                 checkoutsTotal: totalTargets,
-                checkoutRate: `${rate}%`         // "40%"
+                checkoutRate: `${rate}%`,
+                avgDartsPerCheckout: avgDpc,
             },
             heatmap: heatmap,
             chart: {
@@ -249,7 +329,7 @@ export const CheckoutChallenge = {
                 datasets: [{
                     label: 'Punkteverlauf',
                     data: chartValues,
-                    borderColor: '#e11d48', // Passendes Rot/Pink zum Spiel
+                    borderColor: '#e11d48',
                     backgroundColor: 'rgba(225, 29, 72, 0.1)',
                     fill: true
                 }]

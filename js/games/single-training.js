@@ -98,15 +98,30 @@ export const SingleTraining = {
      * Heatmap-Reconstruction (15 Zeilen) → 3 Zeilen über dart.segment.
      */
     getResultData: function(session, player) {
-        const allThrows = player.turns.flatMap(t => t.darts || []);
-        const totalDarts = allThrows.length;
-        const hits = allThrows.filter(d => !d.isMiss && d.multiplier > 0);
+        // Wir müssen durch die Runden iterieren, um sicherzugehen
+        let hits = 0;
+        let totalDarts = 0;
         
-        const singles = hits.filter(d => d.multiplier === 1).length;
-        const doubles = hits.filter(d => d.multiplier === 2).length;
-        const triples = hits.filter(d => d.multiplier === 3).length;
+        // Alle Darts durchgehen und prüfen, ob sie als Treffer markiert wurden
+        if (player.turns) {
+            player.turns.forEach(t => {
+                if (t.darts) {
+                    t.darts.forEach(d => {
+                        totalDarts++;
+                        if (d._isHit) hits++;
+                    });
+                }
+            });
+        }
         
-        const hitRate = totalDarts > 0 ? ((hits.length / totalDarts) * 100).toFixed(1) : "0.0";
+        // Singles/Doubles/Triples nur zählen, wenn es auch ein Treffer auf das Ziel war
+        const validHitsList = player.turns.flatMap(t => t.darts || []).filter(d => d._isHit);
+        
+        const singles = validHitsList.filter(d => d.multiplier === 1).length;
+        const doubles = validHitsList.filter(d => d.multiplier === 2).length;
+        const triples = validHitsList.filter(d => d.multiplier === 3).length;
+        
+        const hitRate = totalDarts > 0 ? ((hits / totalDarts) * 100).toFixed(1) : "0.0";
 
         const chartLabels = session.targets.map(t => t === 25 ? 'B' : t);
         const chartValues = session.targets.map((_, i) => {
@@ -114,8 +129,9 @@ export const SingleTraining = {
             return turn ? turn.score : 0;
         });
 
-        // Step 7a: Einheitliche Heatmap über dart.segment
+        // Heatmap bleibt wie sie ist (zeigt wo die Pfeile gelandet sind)
         const heatmap = {};
+        const allThrows = player.turns.flatMap(t => t.darts || []);
         allThrows.forEach(d => {
             if (!d.isMiss && d.segment) {
                 heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
@@ -126,8 +142,8 @@ export const SingleTraining = {
             summary: {
                 score: player.currentResidual,
                 hitRate: hitRate + "%",
-                hits: hits.length,
-                misses: totalDarts - hits.length
+                hits: hits,
+                misses: totalDarts - hits
             },
             distribution: { singles, doubles, triples },
             chart: { labels: chartLabels, values: chartValues },

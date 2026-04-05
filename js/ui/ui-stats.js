@@ -13,6 +13,7 @@ const CATEGORIES = [
         games: [
             { id: 'x01',     label: 'X01',    icon: '🎯' },
             { id: 'cricket', label: 'Cricket', icon: '🏏' },
+            { id: 'killer',  label: 'Killer',  icon: '🔪' },
         ]
     },
     {
@@ -21,6 +22,7 @@ const CATEGORIES = [
             { id: 'single-training',  label: 'Single Training',  icon: '1️⃣' },
             { id: 'around-the-board', label: 'Around the Board', icon: '🔄' },
             { id: 'shanghai',         label: 'Shanghai',         icon: '🐉' },
+            { id: 'segment-master',   label: 'Segment Master',   icon: '🎯' },
         ]
     },
     {
@@ -35,11 +37,22 @@ const CATEGORIES = [
 ];
 
 const VARIANTS = {
-    'x01':              [{ v:'all',l:'Alle' },{ v:'301',l:'301' },{ v:'501',l:'501' },{ v:'701',l:'701' }],
+    'x01':              [{ v:'all',l:'Alle' },{ v:'170',l:'170' },{ v:'301',l:'301' },{ v:'501',l:'501' },{ v:'701',l:'701' }],
     'cricket':          [{ v:'all',l:'Alle' },{ v:'nolimit',l:'Kein Limit' },{ v:'20',l:'20 Runden' },{ v:'10',l:'10 Runden' },{ v:'mark21',l:'Mark 21' }],
     'shanghai':         [{ v:'all',l:'Alle' },{ v:'7',l:'7 Runden' },{ v:'20',l:'20 Runden' }],
     'around-the-board': [{ v:'all',l:'Alle' },{ v:'full',l:'Komplett' },{ v:'double',l:'Doubles' },{ v:'triple',l:'Triples' }],
     'scoring-drill':    [{ v:'all',l:'Alle' },{ v:'33',l:'33 Darts' },{ v:'66',l:'66 Darts' },{ v:'99',l:'99 Darts' }],
+    'segment-master':   [{ v:'all',l:'Alle' },{ v:'15',l:'15 Darts' },{ v:'30',l:'30 Darts' },{ v:'50',l:'50 Darts' }],
+    'killer':           [
+        { v:'all',    l:'Alle' },
+        { v:'3',      l:'3 Leben' },
+        { v:'5',      l:'5 Leben' },
+        { v:'7',      l:'7 Leben' },
+        { v:'any',    l:'Any' },
+        { v:'single', l:'Single' },
+        { v:'double', l:'Double' },
+        { v:'triple', l:'Triple' },
+    ],
     'halve-it':          [{ v:'all',l:'Alle' },{ v:'short',l:'Short' },{ v:'standard',l:'Standard' },{ v:'long',l:'Long' }],
     'checkout-challenge':[{ v:'all',l:'Alle' },{ v:'10',l:'10 Checks' },{ v:'20',l:'20 Checks' },{ v:'30',l:'30 Checks' }],
 };
@@ -65,7 +78,7 @@ export const Stats = {
         const root = document.getElementById('screen-stats');
         if (!root) return;
 
-        const players = State.getAvailablePlayers();
+        const players = State.getAvailablePlayers().filter(p => !p.isBot);
         if (players.length === 0) {
             root.innerHTML = `<div class="stats-empty-state"><span>👤</span><p>Noch keine Spieler angelegt.</p></div>`;
             return;
@@ -235,6 +248,8 @@ export const Stats = {
             case 'bobs27':             return StatsService.getBobs27Stats(_playerId, _days);
             case 'halve-it':           return StatsService.getHalveItStats(_playerId, _days, _variant);
             case 'scoring-drill':      return StatsService.getScoringDrillStats(_playerId, _days, _variant);
+            case 'segment-master':     return StatsService.getSegmentMasterStats(_playerId, _days, _variant);
+            case 'killer':             return StatsService.getKillerStats(_playerId, _days, _variant);
             case 'checkout-challenge': return StatsService.getCheckoutChallengeStats(_playerId, _days, _variant);
             default: return null;
         }
@@ -250,6 +265,8 @@ export const Stats = {
             'bobs27':            this._renderBobs27,
             'halve-it':          this._renderHalveIt,
             'scoring-drill':     this._renderScoringDrill,
+            'segment-master':    this._renderSegmentMaster,
+            'killer':            this._renderKiller,
             'checkout-challenge':this._renderCheckoutChallenge,
         }[gameId] || null;
     },
@@ -271,6 +288,7 @@ export const Stats = {
                 { label:'100+',        val:s.total100s },
                 { label:'Spiele',      val:s.games },
             ])}
+            ${this._trendCard('match')}
             ${this._dualChartSection('Ø Average', 'First 9')}
             ${this._matchHistory(data.matches, this._x01MatchRow.bind(this))}
         `;
@@ -299,8 +317,8 @@ export const Stats = {
                 { label:'Trefferquote', val:s.hitRate },
                 { label:'Spiele',     val:s.games },
             ])}
-            ${this._distAndChart()}
-            ${this._matchHistory(data.matches, this._trainingMatchRow.bind(this))}
+            ${this._targetMatrixAndChart(data, 'Score Verlauf', 'TREFFERQUOTE PRO FELD')}
+            ${this._matchHistory(data.matches, this._targetMatchRow.bind(this))}
         `;
     },
 
@@ -327,9 +345,21 @@ export const Stats = {
                 { label:'Trefferquote', val:s.hitRate },
                 { label:'Spiele',     val:s.games },
             ])}
-            ${this._distAndChart()}
-            ${this._matchHistory(data.matches, this._trainingMatchRow.bind(this))}
+            ${this._targetMatrixAndChart(data, 'Score Verlauf', 'TREFFERQUOTE PRO FELD')}
+            ${this._matchHistory(data.matches, this._shanghaiMatchRow.bind(this))}
         `;
+    },
+
+    _shanghaiMatchRow: m => {
+        const scoreBadge = m.isShanghaiWin
+            ? `<span class="mh-badge" style="background:#7c3aed;color:#fff;">💎 Shanghai!</span>`
+            : `<span class="mh-kpi">${m.scoreLabel || m.score}<small>pts</small></span>`;
+        return `
+            <span class="mh-date">${m.date}</span>
+            <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+            <span class="mh-opp">${m.opponents}</span>
+            ${scoreBadge}
+            <span class="mh-kpi">${m.hitRate}<small>quote</small></span>`;
     },
 
     _renderBobs27(data) {
@@ -342,6 +372,7 @@ export const Stats = {
                 { label:'Double-Rate', val:s.hitRate },
                 { label:'Spiele',      val:s.games },
             ])}
+            ${this._trendCard('doubles')}
             ${this._singleChartSection('Score Verlauf')}
             ${this._matchHistory(data.matches, this._bobs27MatchRow.bind(this))}
         `;
@@ -374,8 +405,42 @@ export const Stats = {
                 { label:'100+',       val:s.total100 },
                 { label:'Spiele',     val:s.games },
             ])}
+            ${this._trendCard('scoring')}
             ${this._singleChartSection('Ø Average Verlauf')}
             ${this._matchHistory(data.matches, this._drillMatchRow.bind(this))}
+        `;
+    },
+
+    _renderSegmentMaster(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Ø Score',    val:s.avgScore,  accent:true },
+                { label:'Best Score', val:s.bestScore, gold:true },
+                { label:'Hit-Rate',   val:s.hitRate },
+                { label:'Triples',    val:s.totalTriples },
+                { label:'Doubles',    val:s.totalDoubles },
+                { label:'Spiele',     val:s.games },
+            ])}
+            ${this._trendCard('precision')}
+            ${this._singleChartSection('Score Verlauf')}
+            ${this._matchHistory(data.matches, this._segmentMasterMatchRow.bind(this))}
+        `;
+    },
+
+    _renderKiller(data) {
+        const s = data.summary;
+        return `
+            ${this._heroGrid([
+                { label:'Survival Rate',     val:s.survivalRate,     accent:true },
+                { label:'Ø Darts → Killer',  val:s.avgDartsToKiller },
+                { label:'Ø Kills',           val:s.avgKills },
+                { label:'Best: Kills',       val:s.bestKills,        gold:true },
+                { label:'Ø Shields 🛡️',     val:s.avgShields },
+                { label:'Spiele',            val:s.games },
+            ])}
+            ${this._singleChartSection('Kills pro Spiel')}
+            ${this._matchHistory(data.matches, this._killerMatchRow.bind(this))}
         `;
     },
 
@@ -389,7 +454,8 @@ export const Stats = {
                 { label:'Ø Score',       val:s.avgScore },
                 { label:'Spiele',        val:s.games },
             ])}
-            ${this._singleChartSection('Checkout-Rate %')}
+            ${this._trendCard('checkout')}
+            ${this._singleChartSection('Punkte / Checkout-Rate')}
             ${this._matchHistory(data.matches, this._checkoutMatchRow.bind(this))}
         `;
     },
@@ -404,6 +470,23 @@ export const Stats = {
                 <span class="hero-label">${item.label}</span>
                 <span class="hero-val ${item.gold?'gold-val':''}">${item.val ?? '–'}</span>
             </div>`).join('')}</div>`;
+    },
+
+    /** Trend-Karte: zeigt den 7-Tage-Schnitt einer Diagnostic-Achse + Tendenzpfeil */
+    _trendCard(axis) {
+        const t = StatsService.getLatestTrendScores(_playerId)?.[axis];
+        if (!t) return ''; // Noch keine Trend-Daten für diese Achse
+        const axisLabel = { scoring:'Scoring', doubles:'Doppel', checkout:'Checkout',
+                            precision:'Präzision', match:'Match' }[axis] || axis;
+        const trendColor = t.trend === '↑' ? '#10b981' : t.trend === '↓' ? '#ef4444' : '#888';
+        const deltaStr   = t.delta !== null ? ` (${t.delta > 0 ? '+' : ''}${t.delta})` : '';
+        const countStr   = `${t.count} Spiel${t.count !== 1 ? 'e' : ''}`;
+        return `
+            <div class="stats-trend-card">
+                <div class="stc-label">📊 Trend – ${axisLabel} <span class="stc-count">${countStr} diese Woche</span></div>
+                <div class="stc-value" style="color:${trendColor}">${t.trend} ${t.latest}<span class="stc-delta">${deltaStr}</span></div>
+                <div class="stc-hint">Ø der letzten 7 Tage · Basis: normale Spiele</div>
+            </div>`;
     },
 
     _dualChartSection(l1, l2) {
@@ -451,6 +534,26 @@ export const Stats = {
             </div>
             <div class="stats-dist-card">
                 <h5 class="stats-dist-title">Ø DARTS PRO FELD</h5>
+                <div class="atb-matrix">
+                    ${matrix.map(m => `
+                        <div class="atb-cell ${m.heatClass}">
+                            <span class="atb-label">${m.label}</span>
+                            <span class="atb-val">${m.val}</span>
+                        </div>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    },
+
+    _targetMatrixAndChart(data, chartTitle, matrixTitle) {
+        const matrix = data.matrix || [];
+        return `<div class="stats-mid-grid">
+            <div class="stats-chart-card stats-mid-chart">
+                <div class="stats-chart-header"><span class="stats-chart-title">${chartTitle}</span></div>
+                <div class="stats-chart-body"><canvas id="st-chart-trend"></canvas></div>
+            </div>
+            <div class="stats-dist-card">
+                <h5 class="stats-dist-title">${matrixTitle}</h5>
                 <div class="atb-matrix">
                     ${matrix.map(m => `
                         <div class="atb-cell ${m.heatClass}">
@@ -544,7 +647,9 @@ export const Stats = {
                     col4 = (r.score !== undefined && r.score !== 0)
                         ? `<span class="bd-score">${r.score > 0 ? '+' : ''}${r.score}${halvLabel}</span>`
                         : halvLabel;
-                    col5 = r.totalAfter !== undefined
+                    col5 = r.residualAfter !== undefined && r.residualAfter !== null
+                        ? `<span class="bd-total">→ ${r.residualAfter}</span>`
+                        : r.totalAfter !== undefined
                         ? `<span class="bd-total">= ${r.totalAfter}</span>`
                         : '';
                 }
@@ -595,6 +700,13 @@ export const Stats = {
         <span class="mh-kpi">${m.hitRate}<small>quote</small></span>
         <span class="mh-sdt">S<strong>${m.s}</strong> D<strong>${m.d}</strong> T<strong>${m.t}</strong></span>`,
 
+    _targetMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>
+        <span class="mh-kpi">${m.hitRate}<small>quote</small></span>`,
+
     _atbMatchRow: m => `
         <span class="mh-date">${m.date}</span>
         <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
@@ -639,6 +751,25 @@ export const Stats = {
         <span class="mh-kpi">${m.avgDpc}<small>darts/check</small></span>
         <span class="mh-kpi">${m.score}<small>pts</small></span>`,
 
+    _segmentMasterMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge mh-mode">${m.segLabel}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        <span class="mh-kpi">${m.score}<small>pts</small></span>
+        <span class="mh-kpi">${m.hitRate}<small>hit</small></span>
+        <span class="mh-kpi">${m.dartLimit}<small>darts</small></span>`,
+
+    _killerMatchRow: m => `
+        <span class="mh-date">${m.date}</span>
+        <span class="mh-badge ${m.survived ? 'mh-mode' : ''}" style="${m.survived ? '' : 'background:#333;color:#666'}">${m.survived ? '👑' : '☠️'} ${m.zoneLabel || 'D' + m.killerNumber}</span>
+        <span class="mh-badge ${m.resultClass}">${m.resultLabel}</span>
+        <span class="mh-opp">${m.opponents}</span>
+        ${m.shieldOn ? `<span class="mh-badge" style="background:rgba(99,102,241,0.2);color:#818cf8;">🛡️</span>` : ''}
+        <span class="mh-kpi">${m.kills}<small>kills</small></span>
+        ${m.shields > 0 ? `<span class="mh-kpi">${m.shields}<small>🛡️</small></span>` : ''}
+        <span class="mh-kpi">${m.dartsToKiller > 0 ? m.dartsToKiller : '–'}<small>→killer</small></span>`,
+
     // ═══════════════════════════════════════════════════════════════════════
     //  CHARTS
     // ═══════════════════════════════════════════════════════════════════════
@@ -650,6 +781,9 @@ export const Stats = {
 
         const ctx = canvas.getContext('2d');
         let datasets = [], labels = [];
+        let useDualAxis = false;
+        let dualAxisMax = 100;
+        let dualAxisSuffix = '%';
 
         if (_gameId === 'x01' && data.charts) {
             labels = data.charts.labels || [];
@@ -661,6 +795,39 @@ export const Stats = {
                   borderColor:'#eab308', borderDash:[5,5], tension:0.4,
                   type:'line', pointRadius:0 },
             ];
+        } else if (_gameId === 'bobs27' && data.chart) {
+            // Bob's 27: Bars = Score (min 0), Linie = erreichte Runde (rechte Achse)
+            labels = data.chart.labels || [];
+            const barVals = data.chart.values || [];
+            const roundVals = data.chart.reachedRounds || [];
+            datasets = [
+                { label:'Score (≥0)', data: barVals,
+                  backgroundColor:'rgba(99,102,241,0.45)', borderColor:'rgba(99,102,241,0.8)',
+                  type:'bar', order:2, yAxisID:'y' },
+                { label:'Erreichte Runde', data: roundVals,
+                  borderColor:'#00d26a', backgroundColor:'transparent',
+                  type:'line', tension:0.4, pointRadius:3, order:1, yAxisID:'y1' },
+            ];
+            useDualAxis = true;
+            dualAxisMax = 21; // Bob's 27 hat max 21 Runden (D1-D20 + Bull)
+            dualAxisSuffix = '';
+        } else if (_gameId === 'checkout-challenge' && data.chart) {
+            // Checkout Challenge: Bars = Punkte, Linie = Checkout-Rate %
+            labels = data.chart.labels || [];
+            const pts = data.chart.values || [];
+            const rates = data.chart.rates || [];
+            datasets = [
+                { label:'Punkte', data: pts,
+                  backgroundColor:'rgba(99,102,241,0.45)', borderColor:'rgba(99,102,241,0.8)',
+                  type:'bar', order:2, yAxisID:'y' },
+                { label:'Checkout-Rate %', data: rates,
+                  borderColor:'#00d26a', backgroundColor:'transparent',
+                  type:'line', tension:0.4, pointRadius:3, order:1, yAxisID:'y1' },
+            ];
+            // Dual-Achse: y = Punkte, y1 = Rate %
+            useDualAxis = true;
+            dualAxisMax = 100;
+            dualAxisSuffix = '%';
         } else if (data.chart) {
             labels = data.chart.labels || [];
             const vals = data.chart.values || [];
@@ -685,20 +852,32 @@ export const Stats = {
         const minVal = allValues.length ? Math.min(...allValues) : 0;
         const yMin = minVal > 0 ? minVal * 0.9 : minVal;
 
+        // Build scales config
+        const scales = {
+            y: {
+                beginAtZero: useDualAxis ? true : false,
+                suggestedMin: useDualAxis ? undefined : yMin,
+                grid:{ color:'rgba(255,255,255,0.05)' },
+                ticks:{ color:'#888' }
+            },
+            x: { grid:{ display:false }, ticks:{ color:'#888', maxTicksLimit:12 } }
+        };
+        if (useDualAxis) {
+            scales.y1 = {
+                position: 'right',
+                beginAtZero: true,
+                max: dualAxisMax,
+                grid: { drawOnChartArea: false },
+                ticks: { color: '#00d26a', callback: v => v + dualAxisSuffix }
+            };
+        }
+
         window._statsChart = new Chart(ctx, {
             data: { labels, datasets },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode:'index', intersect:false },
-                scales: {
-                    y: {
-                        beginAtZero: false,
-                        suggestedMin: yMin,
-                        grid:{ color:'rgba(255,255,255,0.05)' },
-                        ticks:{ color:'#888' }
-                    },
-                    x: { grid:{ display:false }, ticks:{ color:'#888', maxTicksLimit:12 } }
-                },
+                scales,
                 plugins: { legend:{ labels:{ color:'#bbb', boxWidth:12 } } }
             }
         });

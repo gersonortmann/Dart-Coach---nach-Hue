@@ -71,6 +71,12 @@ export const Game = {
 		else if (session.gameId === 'scoring-drill') {
 			this._renderScoringDrill(session);
 		}
+		else if (session.gameId === 'segment-master') {
+			this._renderSegmentMaster(session);
+		}
+		else if (session.gameId === 'killer') {
+			this._renderKiller(session);
+		}
         else {
             this._renderX01(session);
         }
@@ -116,8 +122,17 @@ export const Game = {
             if (session.gameId === 'halve-it' || 
                 session.gameId === 'checkout-challenge' || 
                 session.gameId === 'scoring-drill' || 
-                session.gameId === 'cricket') { // Bei Cricket zeigen wir hier oft Punkte oder Marks, Score ist aber safe
+                session.gameId === 'segment-master' ||
+                session.gameId === 'cricket') {
                 displayScore = p.score;
+            }
+            else if (session.gameId === 'killer') {
+                if (p.finished) {
+                    displayScore = '☠️';
+                } else {
+                    const lives = p.lives ?? 3;
+                    displayScore = '❤️'.repeat(lives);
+                }
             }
 
             // Sicherstellen, dass 0 angezeigt wird
@@ -127,7 +142,10 @@ export const Game = {
             let metaInfo = "&nbsp;"; 
 
             if (session.gameId === 'x01') {
-                if (session.settings.mode === 'sets') {
+                if (session.settings.startScore === 170) {
+                    // 170 Checkout-Training: "Runde X / Y"
+                    metaInfo = `Runde: ${(p.legsWon || 0) + 1}/${session.settings.bestOf}`;
+                } else if (session.settings.mode === 'sets') {
                     metaInfo = `S:${p.setsWon} | L:${p.legsWon}`;
                 } else {
                     metaInfo = `Legs: ${p.legsWon}`;
@@ -146,12 +164,27 @@ export const Game = {
             else if (session.gameId === 'scoring-drill') {
                  metaInfo = `PPT: ${p.livePpt || '00.0'}`;
             }
+            else if (session.gameId === 'segment-master') {
+                 metaInfo = `Quote: ${p.liveHitRate || '0.0%'}`;
+            }
+            else if (session.gameId === 'killer') {
+                const zone = session.settings?.zone ?? 'double';
+                const prefix = zone === 'double' ? 'D' : zone === 'triple' ? 'T' : '';
+                const fieldLabel = prefix + p.killerNumber;
+                const badge = p.finished ? '☠️' : (p.isKiller ? `🔪 ${fieldLabel}` : fieldLabel);
+                metaInfo = badge;
+            }
             else if (session.gameId === 'checkout-challenge') {
                  metaInfo = `Checks: ${p.checkoutsHit || '0'}`;
             }
             else if (session.gameId === 'halve-it') {
                  metaInfo = `Halbiert: ${p.halvedCount || '0'}`;
             }
+
+            // Killer: Herz-Emojis brauchen kleinere Schrift
+            const scoreStyle = (session.gameId === 'killer' && !p.finished)
+                ? 'font-size:1rem; letter-spacing:1px;'
+                : '';
 
             html += `
 				<div class="player-header-card ${isActive ? 'active' : ''}">
@@ -164,7 +197,7 @@ export const Game = {
 					</div>
 					
 					<div class="ph-col-right">
-						<div class="ph-score">${displayScore}</div>
+						<div class="ph-score" style="${scoreStyle}">${displayScore}</div>
 					</div>
 				</div>
 			`;
@@ -193,12 +226,32 @@ export const Game = {
         const box = document.querySelector('.target-box');
         const standardEls = box.querySelectorAll('.target-row-main, .target-row-hint, .target-row-score, #turn-score-container');
         
+        // FIX: Inline-Styles auf der Checkout-Suggestion zurücksetzen.
+        // Verschiedene Renderer (X01, Checkout Challenge, Halve It, Scoring Drill)
+        // setzen opacity, color, transition, visibility etc. – ohne Reset
+        // "leaken" diese Styles in den nächsten Renderer.
+        const hint = document.getElementById('checkout-suggestion');
+        if (hint) {
+            hint.style.opacity = '';
+            hint.style.color = '';
+            hint.style.transition = '';
+            hint.style.visibility = '';
+        }
+        // Auch turn-score-val Farbe zurücksetzen (wird von verschiedenen Renderern gefärbt)
+        const tsVal = document.getElementById('turn-score-val');
+        if (tsVal) tsVal.style.color = '';
+
+        // game-target-val: Schriftgröße und Farbe zurücksetzen (Killer setzt beides dynamisch)
+        const targetVal = document.getElementById('game-target-val');
+        if (targetVal) {
+            targetVal.style.fontSize = '';
+            targetVal.style.color    = '';
+        }
+
         let cricketContainer = document.getElementById('cricket-view-container');
         if (!cricketContainer) {
             cricketContainer = document.createElement('div');
             cricketContainer.id = 'cricket-view-container';
-            cricketContainer.style.width = '100%';
-            cricketContainer.style.flex = '1'; 
             const dartBox = document.getElementById('dart-display-container');
             box.insertBefore(cricketContainer, dartBox);
         }
@@ -206,11 +259,13 @@ export const Game = {
         if (mode === 'cricket') {
             standardEls.forEach(el => el.classList.add('hidden'));
             cricketContainer.classList.remove('hidden');
-            cricketContainer.style.display = 'block';
+            cricketContainer.style.display = '';   // flex via CSS
+            box.classList.add('cricket-mode');
         } else {
             standardEls.forEach(el => el.classList.remove('hidden'));
             cricketContainer.classList.add('hidden');
             cricketContainer.style.display = 'none';
+            box.classList.remove('cricket-mode');
         }
         
         const dbContainer = document.getElementById('dart-display-container');
@@ -309,7 +364,7 @@ export const Game = {
 
         targets.forEach(t => {
             const label = t === 25 ? 'B' : t;
-            // Zeile geschlossen? (Einfache Logik: wenn alle zu haben)
+            // Zeile geschlossen? (alle Spieler haben 3+ Marks)
             const allClosed = players.every(p => (p.marks[t] || 0) >= 3);
             const rowClass = allClosed ? 'cricket-row closed-row' : 'cricket-row';
 
@@ -322,23 +377,35 @@ export const Game = {
                 return `<svg class="mark-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/></svg>`; 
             };
 
+            // Bestimmt die CSS-Klasse für die Farbe des Mark-Symbols
+            const getMarkColorClass = (pIdx) => {
+                if (allClosed) return 'mark-closed';
+                const thisMarks = players[pIdx].marks[t] || 0;
+                if (thisMarks >= 3) {
+                    // Dieser Spieler hat geschlossen – kann er punkten (mind. 1 Gegner noch offen)?
+                    const anyOpponentOpen = players.some((op, i) => i !== pIdx && (op.marks[t] || 0) < 3);
+                    return anyOpponentOpen ? 'mark-scoring' : 'mark-closed';
+                }
+                // Dieser Spieler < 3: gibt es Gegner mit >= 3, die auf ihn punkten können?
+                const opponentCanScore = players.some((op, i) => i !== pIdx && (op.marks[t] || 0) >= 3);
+                return opponentCanScore ? 'mark-danger' : '';
+            };
+
             if (players.length <= 2) {
-                // P1
-                boardHtml += `<div class="c-mark-cell ${activePIdx === 0 ? 'active-col' : ''}">${getMarkSVG(players[0].marks[t])}</div>`;
-                // Target
+                const cls0 = getMarkColorClass(0);
+                boardHtml += `<div class="c-mark-cell ${activePIdx === 0 ? 'active-col' : ''} ${cls0}">${getMarkSVG(players[0].marks[t])}</div>`;
                 boardHtml += `<div class="c-target-cell">${label}</div>`;
-                // P2
-                if(players[1]) {
-                    boardHtml += `<div class="c-mark-cell ${activePIdx === 1 ? 'active-col' : ''}" style="border-right:none;">${getMarkSVG(players[1].marks[t])}</div>`;
+                if (players[1]) {
+                    const cls1 = getMarkColorClass(1);
+                    boardHtml += `<div class="c-mark-cell ${activePIdx === 1 ? 'active-col' : ''} ${cls1}" style="border-right:none;">${getMarkSVG(players[1].marks[t])}</div>`;
                 } else {
-                     boardHtml += `<div></div>`;
+                    boardHtml += `<div></div>`;
                 }
             } else {
-                // Target Links
                 boardHtml += `<div class="c-target-cell">${label}</div>`;
-                // Players
                 players.forEach((p, idx) => {
-                    boardHtml += `<div class="c-mark-cell ${activePIdx === idx ? 'active-col' : ''}" style="${idx === players.length-1 ? 'border-right:none;' : ''}">
+                    const cls = getMarkColorClass(idx);
+                    boardHtml += `<div class="c-mark-cell ${activePIdx === idx ? 'active-col' : ''} ${cls}" style="${idx === players.length-1 ? 'border-right:none;' : ''}">
                         ${getMarkSVG(p.marks[t])}
                     </div>`;
                 });
@@ -377,6 +444,13 @@ export const Game = {
         const dartsLeft = 3 - (session.tempDarts || []).length;
         let guide = dartsLeft > 0 ? GameEngine.getCheckoutGuide(player.currentResidual, dartsLeft) : "";
         
+        // FIX: Alle Inline-Styles zurücksetzen, die andere Renderer (Checkout Challenge,
+        // Halve It, Scoring Drill) auf dem hint-Container hinterlassen.
+        // Ohne diesen Reset bleibt z.B. opacity:0 von Checkout Challenge bestehen.
+        hintContainer.style.opacity = '';
+        hintContainer.style.color = '';
+        hintContainer.style.transition = '';
+
         if(guide) { 
             hintContainer.innerText = guide;
             hintContainer.style.visibility = '';
@@ -448,7 +522,154 @@ export const Game = {
         this._updateDartBoxes(session);
         this._renderMultiplayerScoreboard(session);
     },
-	
+
+    _renderSegmentMaster: function(session) {
+        this._prepareTargetBox('standard');
+        const player = session.players[session.currentPlayerIndex];
+
+        const headerScore = document.getElementById('game-player-score');
+        if (headerScore) headerScore.innerText = player.score;
+
+        const targetValEl     = document.getElementById('game-target-val');
+        const labelEl         = document.getElementById('lbl-target-desc');
+        const hintContainer   = document.getElementById('checkout-suggestion');
+        const scoreLabel      = document.getElementById('lbl-turn-score');
+        const scoreVal        = document.getElementById('turn-score-val');
+
+        // Ziel-Anzeige: Segment + Zone
+        const segLabel  = player.target === 25 ? 'BULL' : String(player.target);
+        const zoneLabel = { any:'', single:' S', inner:' Inner', outer:' Outer',
+                            double:' D', triple:' T' }[player.zone || 'any'] || '';
+        if (targetValEl) targetValEl.innerText = segLabel + zoneLabel;
+        if (labelEl) {
+            const zoneFull = { any:'ALLE ZONEN', single:'SINGLE', inner:'INNER SINGLE',
+                               outer:'OUTER SINGLE', double:'DOUBLE', triple:'TRIPLE' };
+            labelEl.innerText = zoneFull[player.zone || 'any'] || 'ZIEL';
+        }
+
+        // Aufnahmen-Zähler (korrekt: completed turns + 1 für laufende)
+        const completedTurns = player.turns.length;
+        // Korrektur-Fenster: tempDarts=3 bedeutet Aufnahme gerade fertig → noch nicht inkrementiert
+        const currentTurn = (session.tempDarts || []).length === 3
+            ? completedTurns
+            : completedTurns + 1;
+        const limit = player.turnLimit || 10;
+
+        if (hintContainer) {
+            hintContainer.classList.remove('hidden');
+            hintContainer.innerText = `AUFNAHME ${Math.min(currentTurn, limit)} / ${limit}`;
+            hintContainer.style.color = '#888';
+        }
+
+        // Live Aufnahme-Punkte
+        if (scoreLabel) scoreLabel.innerText = 'AUFNAHME';
+        const smTurnScore = (session.tempDarts || []).reduce(
+            (a, d) => a + (d._isHit ? (d.multiplier || 1) : 0), 0);
+        if (scoreVal) {
+            scoreVal.innerText = smTurnScore > 0 ? String(smTurnScore) : '0';
+            scoreVal.style.color = smTurnScore > 0 ? 'var(--accent-color)' : '#666';
+        }
+
+        this._updateDartBoxes(session);
+        this._renderMultiplayerScoreboard(session);
+    },
+
+    _renderKiller: function(session) {
+        this._prepareTargetBox('standard');
+        const player  = session.players[session.currentPlayerIndex];
+        const zone    = session.settings?.zone   ?? 'double';
+        const shield  = session.settings?.shield ?? false;
+
+        const targetValEl   = document.getElementById('game-target-val');
+        const labelEl       = document.getElementById('lbl-target-desc');
+        const hintContainer = document.getElementById('checkout-suggestion');
+        const scoreLabel    = document.getElementById('lbl-turn-score');
+        const scoreVal      = document.getElementById('turn-score-val');
+        const headerScore   = document.getElementById('game-player-score');
+
+        if (headerScore) headerScore.innerText = '';  // Leben jetzt als ❤️ in Spielerkarte
+
+        // Zonen-Labels
+        const zoneLabel = { any:'ANY', single:'SINGLE', double:'DOUBLE', triple:'TRIPLE' }[zone] || 'DOUBLE';
+        const zonePrefix = (num) => {
+            if (zone === 'double') return `D${num}`;
+            if (zone === 'triple') return `T${num}`;
+            if (zone === 'single') return `S${num}`;
+            return String(num); // any
+        };
+
+        // ── Fix 3: Aufnahmeergebnis in Targetbox zeigen (statt Popup-Overlay) ─
+        if (session.targetBoxMessage && (session.tempDarts || []).length === 3) {
+            const msg = session.targetBoxMessage;
+            if (targetValEl) {
+                targetValEl.innerText   = msg;
+                targetValEl.style.color = '#ef4444';
+                targetValEl.style.fontSize = msg.length <= 5 ? '7rem'
+                    : msg.length <= 10 ? '4.5rem'
+                    : msg.length <= 16 ? '3rem'
+                    : '2.2rem';
+            }
+            if (labelEl) labelEl.innerText = 'AUFNAHME';
+            if (hintContainer) hintContainer.classList.add('hidden');
+            this._updateDartBoxes(session);
+            this._renderMultiplayerScoreboard(session);
+            return;
+        }
+
+        if (!player.isKiller) {
+            // Phase 1: Eigenes Feld treffen
+            if (targetValEl) {
+                targetValEl.innerText      = zonePrefix(player.killerNumber);
+                targetValEl.style.color    = '';
+                targetValEl.style.fontSize = '';
+            }
+            if (labelEl) labelEl.innerText = `DEIN ${zoneLabel}`;
+            if (hintContainer) {
+                hintContainer.classList.remove('hidden');
+                hintContainer.innerText    = 'WERDE KILLER 🔪';
+                hintContainer.style.color  = '#f59e0b';
+            }
+        } else {
+            // Phase 2: Gegner angreifen
+            const victims = session.players.filter(p => !p.finished && p.id !== player.id);
+
+            if (targetValEl) {
+                targetValEl.style.color = '';
+                if (victims.length === 0) {
+                    targetValEl.innerText      = '🏆';
+                    targetValEl.style.fontSize = '8rem';
+                } else {
+                    const targetStr = '🔪 ' + victims.map(p => zonePrefix(p.killerNumber)).join(' ');
+                    targetValEl.innerText = targetStr;
+                    targetValEl.style.fontSize = victims.length <= 2 ? '5rem'
+                        : victims.length <= 3 ? '3.5rem'
+                        : '2.5rem';
+                }
+            }
+            if (labelEl) labelEl.innerText = `KILLER – ${zoneLabel}`;
+            if (hintContainer) {
+                if (victims.length > 0) {
+                    const shieldHint = shield ? `  🛡️ ${zonePrefix(player.killerNumber)}` : '';
+                    hintContainer.classList.remove('hidden');
+                    hintContainer.innerText    = victims.map(p => `${zonePrefix(p.killerNumber)} ${p.name}`).join('  ') + shieldHint;
+                    hintContainer.style.color  = '#ef4444';
+                    hintContainer.style.fontSize = '0.85rem';
+                } else {
+                    hintContainer.classList.add('hidden');
+                }
+            }
+        }
+
+        if (scoreLabel) scoreLabel.innerText = 'KILLS';
+        if (scoreVal) {
+            scoreVal.innerText = String(player.kills || 0);
+            scoreVal.style.color = player.kills > 0 ? '#ef4444' : '#666';
+        }
+
+        this._updateDartBoxes(session);
+        this._renderMultiplayerScoreboard(session);
+    },
+
 	_renderHalveIt: function(session) {
         this._prepareTargetBox('standard');
         
@@ -517,34 +738,39 @@ export const Game = {
 
         const player = session.players[session.currentPlayerIndex];
         const targets = session.targets;
-        
+
+        // Wenn _pendingCCReset vorliegt und noch kein Dart geworfen wurde,
+        // die pending-Werte für die Anzeige verwenden (lazy apply noch nicht passiert).
+        const pending = player._pendingCCReset;
+        const dartsNow = (session.tempDarts || []).length;
+        const displayTurnOnTarget = (pending && dartsNow === 0)
+            ? pending.turnOnTarget
+            : (player._turnOnTarget || 0);
+        const displayStartRes = (pending && dartsNow === 0)
+            ? pending.startOfTurnRes
+            : ((player._startOfTurnRes !== undefined) ? player._startOfTurnRes : targets[0]);
+
         const currentTurnScore = (session.tempDarts || []).reduce((a,b) => a + b.points, 0);
 
-        // Standard: Wir nehmen den gespeicherten Startwert (z.B. 85 nach Checkout)
-        let startRes = (player._startOfTurnRes !== undefined) 
-            ? player._startOfTurnRes 
-            : targets[0];
-            
+        // Time Machine: nach Dart 3 den Snapshot aus _completedRoundDisplay nutzen
+        // (deckt alle Fälle ab: Check, Bust, normales Rundenende)
+        let startRes = displayStartRes;
         let currentRoundIndex = player._roundIdx || 0;
 
-        // 🔍 FIX: "Time Machine" nur im Overlay-Moment (alle 3 Darts geworfen)
-        // Wenn Darts noch im Speicher liegen UND die Strategie bereits auf die nächste Runde geschaltet hat,
-        // den Display noch auf die alte Runde zeigen.
-        if (session.tempDarts && session.tempDarts.length === 3 && currentRoundIndex > 0) {
+        if (dartsNow === 3 && player._completedRoundDisplay) {
+            startRes          = player._completedRoundDisplay.startRes;
+            currentRoundIndex = player._completedRoundDisplay.roundIdx;
+        } else if (session.tempDarts && dartsNow === 3 && currentRoundIndex > 0) {
+            // Fallback für ältere Pfade (Bust/Check ohne _completedRoundDisplay)
             const prevTarget = targets[currentRoundIndex - 1];
             const prevRes = prevTarget - currentTurnScore;
-            
-            // Wenn die Rechnung mit dem neuen Ziel keinen Sinn macht (< 0)
-            // ODER wenn wir auf dem alten Ziel exakt 0 (Check) oder <=1 (Bust) haben:
-            // Dann zeigen wir visuell noch die ALTE Runde an.
             if ((startRes - currentTurnScore) < 0 || prevRes <= 1) {
                 startRes = prevTarget;
-                currentRoundIndex--; // Auch Anzeige "Runde X" korrigieren
+                currentRoundIndex--;
             }
         }
 
-        // Live-Restwert Berechnung
-        let liveResidual = startRes - currentTurnScore;
+        const liveResidual = startRes - currentTurnScore;
 
         // UI Elemente
         const targetValEl = document.getElementById('game-target-val');
@@ -570,11 +796,15 @@ export const Game = {
         // 2. Header Score
         if (headerScore) headerScore.innerText = player.score;
         
-        // 3. Runden-Info
+        // 3. Runden-Info + Aufnahme
         if (labelEl) {
-            // +1 weil Array 0-basiert
             const displayRound = currentRoundIndex + 1;
-            labelEl.innerText = `RUNDE ${displayRound} von ${targets.length}`;
+            const maxTurns = session.settings.turnsPerTarget || 1;
+            if (maxTurns > 1) {
+                labelEl.innerText = `RUNDE ${displayRound}/${targets.length} · Aufn. ${displayTurnOnTarget + 1}/${maxTurns}`;
+            } else {
+                labelEl.innerText = `RUNDE ${displayRound} von ${targets.length}`;
+            }
         }
 
         // 4. Checkout Guide (Grüne Box)
@@ -625,32 +855,31 @@ export const Game = {
         const hintContainer = document.getElementById('checkout-suggestion');
         const scoreVal = document.getElementById('turn-score-val');
        
-        // Target Logic
-        const currentIdx = player.currentResidual || 0;
-        let targetText = "FINISH";
-        
-        if (currentIdx < session.targets.length) {
-            const rawTarget = session.targets[currentIdx];
-            
-            // ÄNDERUNG: KEIN PRÄFIX MEHR IM HAUPTFENSTER
-            // Nur "25" wird zu "BULL", sonst bleibt die Zahl nackt.
-            targetText = (rawTarget === 25) ? "BULL" : rawTarget;
+        // Time Machine: wenn Dart 3 ein Treffer war, hat handleInput currentResidual
+        // bereits inkrementiert – wir zeigen noch den abgeschlossenen Zustand.
+        const dartsNow  = (session.tempDarts || []).length;
+        const lastDartHit = dartsNow === 3 && session.tempDarts[2]?._isHit;
+        const displayIdx = lastDartHit
+            ? Math.max(0, (player.currentResidual || 0) - 1)
+            : (player.currentResidual || 0);
+
+        let targetText = 'FINISH';
+        if (displayIdx < session.targets.length) {
+            const rawTarget = session.targets[displayIdx];
+            targetText = (rawTarget === 25) ? 'BULL' : rawTarget;
         }
 
         targetValEl.innerText = targetText;
         
-        // Optional: Info unter der Zahl anzeigen ("Single Inner")
         const v = player.variant || 'full';
         const subMap = { 'full':'', 'single-inner':'Inner', 'single-outer':'Outer', 'double':'Double', 'triple':'Triple' };
-        document.getElementById('lbl-target-desc').innerText = subMap[v] || "Ziel";
+        document.getElementById('lbl-target-desc').innerText = subMap[v] || 'Ziel';
 
-        // Fortschrittsanzeige
         hintContainer.classList.remove('hidden');
-        hintContainer.innerText = `Ziel ${currentIdx + 1} von ${session.targets.length}`;
+        hintContainer.innerText = `Ziel ${displayIdx + 1} von ${session.targets.length}`;
 
-        // Score in Aufnahme: Treffer auf das aktuelle Ziel (via _isHit aus Strategie)
         const currentTurnHits = (session.tempDarts || []).filter(d => d._isHit).length;
-        const totalInTurn = (session.tempDarts || []).length;
+        const totalInTurn = dartsNow;
         scoreVal.innerText = totalInTurn === 0 ? '0' : currentTurnHits + ' Treffer';
         scoreVal.style.color = currentTurnHits > 0 ? 'var(--accent-color)' : (totalInTurn > 0 ? 'var(--miss-color)' : '#666');
         
@@ -876,8 +1105,8 @@ export const Game = {
             box.classList.add('filled');
             if (isHeld) box.classList.add('dart-held');
 
-            // Klick-Handler (nur für live Darts, nicht Held)
-            if (!isHeld) {
+            // Klick-Handler (nur für live Darts, nicht Held, nicht Bot)
+            if (!isHeld && !player.isBot) {
                 const boxIndex  = i;
                 const dartCount = held ? held.afterPosition : totalNow;
                 box.style.cursor = 'pointer';
@@ -953,8 +1182,10 @@ export const Game = {
                 
                 // FIX: Score-Auswahl für Halve It / Checkout Challenge
                 let rawScore = p.currentResidual;
-                if (session.gameId === 'halve-it' || session.gameId === 'checkout-challenge' || session.gameId === 'scoring-drill') {
+                if (session.gameId === 'halve-it' || session.gameId === 'checkout-challenge' || session.gameId === 'scoring-drill' || session.gameId === 'segment-master') {
                     rawScore = p.score;
+                } else if (session.gameId === 'killer') {
+                    rawScore = p.lives ?? 3;
                 }
                 
                 let scoreVal = String(rawScore !== undefined ? rawScore : 0);
@@ -1054,7 +1285,9 @@ export const Game = {
 
     showResult: function() { ResultScreen.show(); },
     renderDetails: function(playerId) { ResultScreen.renderDetails(playerId); },
-    selectResultPlayer: function(playerId) { ResultScreen.renderDetails(playerId); }
+    selectResultPlayer: function(playerId) {
+        ResultScreen.renderPlayerDashboard(playerId, State.getActiveSession());
+    },
 };
 /**
  * Formatiert ein Dart-Segment für die Anzeige in den Dartboxen.

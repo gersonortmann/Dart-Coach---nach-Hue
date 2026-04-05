@@ -277,8 +277,25 @@
 /* Result Screen styles → see game_additions.css appended below */
 
 /* =========================================
-   CRICKET BOARD (Restored & Optimized)
+   CRICKET BOARD (Dynamic Fill)
    ========================================= */
+
+/* Target-Box im Cricket-Modus: oben ausrichten, kein Gap-Sprung */
+.target-box.cricket-mode {
+    justify-content: flex-start;
+    padding: var(--gap-sm);
+    gap: 6px;
+}
+
+/* cricket-view-container füllt den gesamten verfügbaren Platz */
+#cricket-view-container {
+    flex: 1;
+    min-height: 0;          /* wichtig: verhindert dass flex-item über den Container wächst */
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
 
 .cricket-board {
     display: flex; flex-direction: column; width: 100%; max-width: 600px;
@@ -286,19 +303,29 @@
     border: 1px solid var(--border-default); 
     border-radius: 12px;
     overflow: hidden;
-	margin: 0 auto;	
-    margin-bottom: var(--gap-lg);
+    margin: 0 auto;
     box-shadow: var(--shadow-md);
-    /* Zentrieren im Container */
-    align-self: center; 
+    align-self: center;
+    /* Füllt den cricket-view-container vollständig aus */
+    flex: 1;
+    min-height: 0;
 }
 
 /* Grid Rows (Header & Data) */
 /* Die Spaltenbreiten (grid-template-columns) werden inline per JS gesetzt */
-.cricket-header, .cricket-row {
-    display: grid; 
+.cricket-header {
+    display: grid;
     border-bottom: 1px solid var(--border-default);
     align-items: stretch;
+    flex-shrink: 0;          /* feste Höhe, kein Schrumpfen */
+    min-height: 64px;
+}
+.cricket-row {
+    display: grid;
+    border-bottom: 1px solid var(--border-default);
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
 }
 .cricket-row:last-child { border-bottom: none; }
 
@@ -314,9 +341,9 @@
 
 /* Aktiver Spieler im Header */
 .c-player-header.active {
-    background: var(--accent-dim); 
+    background: rgba(255, 193, 7, 0.08); 
     color: var(--text-main);
-    box-shadow: inset 0 -3px 0 var(--accent-color); /* Grüner Balken unten */
+    box-shadow: inset 0 -3px 0 var(--highlight-color); /* Gelber Balken unten */
 }
 
 /* Großer Score (Restpunkte) */
@@ -324,7 +351,7 @@
     font-size: 1.5rem; color: var(--text-main); font-weight: 900; 
     line-height: 1.2; margin-top: 4px;
 }
-.c-player-header.active .c-score-big { color: white; text-shadow: 0 0 10px var(--accent-glow); }
+.c-player-header.active .c-score-big { color: white; text-shadow: 0 0 10px rgba(255,193,7,0.4); }
 
 
 /* --- ROW & CELLS --- */
@@ -334,17 +361,17 @@
     display: flex; align-items: center; justify-content: center;
     font-weight: 900; font-size: 1.3rem; 
     color: var(--accent-color); 
-    background: var(--bg-input); /* Etwas dunkler als der Rest */
+    background: var(--bg-input);
     border-left: 1px solid var(--border-default);
     border-right: 1px solid var(--border-default);
-    min-height: 50px;
+    min-height: 0;          /* flex-fill statt fixed height */
 }
 
 /* Spieler-Spalten (Marks) */
 .c-mark-cell {
     display: flex; align-items: center; justify-content: center;
-    position: relative; 
-    min-height: 50px;
+    position: relative;
+    min-height: 0;          /* flex-fill statt fixed height */
     transition: background 0.2s;
 }
 
@@ -365,6 +392,35 @@
 .active-col .mark-svg { 
     stroke: var(--accent-color); 
     filter: drop-shadow(0 0 4px var(--accent-glow)); 
+}
+
+/* ── DYNAMISCHE MARK-ZUSTÄNDE ──────────────────────────────── */
+
+/* Spieler kann auf diesem Feld punkten (3+ Marks, Gegner noch offen) → grün */
+.c-mark-cell.mark-scoring {
+    background: rgba(0, 210, 106, 0.07);
+}
+.c-mark-cell.mark-scoring .mark-svg {
+    stroke: var(--accent-color);
+    filter: drop-shadow(0 0 5px var(--accent-glow));
+}
+
+/* Gegner kann auf diesem Feld punkten (Gegner 3+, dieser Spieler < 3) → rot */
+/* Hintergrund auch wenn noch kein SVG vorhanden (0 Marks) */
+.c-mark-cell.mark-danger {
+    background: rgba(239, 68, 68, 0.08);
+}
+.c-mark-cell.mark-danger .mark-svg {
+    stroke: #ef4444;
+    filter: drop-shadow(0 0 4px rgba(239,68,68,0.5));
+}
+
+/* Feld vollständig geschlossen (alle 3+) → dunkelgrau, überschreibt alles inkl. active-col */
+.c-mark-cell.mark-closed .mark-svg,
+.closed-row .c-mark-cell .mark-svg {
+    stroke: #3a3a3a !important;
+    filter: none !important;
+    opacity: 0.5;
 }
 
 
@@ -483,18 +539,18 @@
 
 /* --- ACTIVE STATE (Der Spieler, der dran ist) --- */
 
-/* Basis Active Style (Rahmen leuchtet immer) */
+/* Basis Active Style (Rahmen leuchtet immer – Gelb wie Target-Highlight) */
 .player-header-card.active {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2);
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
 }
 
 /* NUR IM MULTIPLAYER: Hintergrund einfärben */
 /* Wir nutzen eine Klasse .is-multi auf dem Grid, um das zu steuern */
 .player-header-grid.is-multi .player-header-card.active {
-    background: var(--accent-dim);
-    border-color: var(--accent-color);
-	box-shadow: 0 0 15px rgba(0, 210, 106, 0.2);
+    background: rgba(255, 193, 7, 0.08);
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
 }
 
 /* Textfarben im aktiven Multiplayer-Status anpassen (Dunkel auf Grün) */
@@ -524,104 +580,163 @@
    RESULT SCREEN — NEUE VERSION
    ========================================= */
 
-/* ── Winner Bar (einzeilig) ──────────────────────────────────────────── */
-.result-winner-bar {
+/* ── UNIFIED PLAYER STRIP ────────────────────────────────────────────── */
+.result-player-strip {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
-    padding: 12px 20px;
-    background: rgba(255,255,255,0.025);
+    padding: 14px 20px;
+    background: rgba(255,255,255,0.02);
     border-bottom: 1px solid #222;
-    min-height: 54px;
     flex-wrap: wrap;
 }
-.result-winner-left {
+
+.rps-players {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+/* Einzelne Spielerkarte */
+.rps-card {
+    flex: 1;
+    min-width: 110px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0.6;
+}
+.rps-card:hover { background: rgba(255,255,255,0.07); opacity: 0.85; }
+
+/* Aktive (angezeigte) Karte */
+.rps-card.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 14px rgba(0,210,106,0.25);
+    opacity: 1;
+}
+
+/* Gewinner-Karte: goldener Akzent */
+.rps-card.rps-winner {
+    background: rgba(234,179,8,0.07);
+    border-color: rgba(234,179,8,0.35);
+    opacity: 1;
+}
+.rps-card.rps-winner.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 14px rgba(0,210,106,0.3), 0 0 30px rgba(234,179,8,0.1);
+}
+
+/* Inneres Layout: Rang-Icon links, Info rechts */
+.rps-card-inner {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    height: 100%;
+}
+
+.rps-rank-col {
+    font-size: 2rem;
+    line-height: 1;
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+.rps-card:not(.rps-winner) .rps-rank-col { opacity: 0.4; }
+
+.rps-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
+}
+
+.rps-card-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
     flex-wrap: wrap;
 }
-.result-winner-right {
-    display: flex;
-    gap: 10px;
+
+.rps-rank-icon {
+    font-size: 1rem;
+    line-height: 1;
     flex-shrink: 0;
 }
-.result-crown {
-    font-size: 1.4rem;
-    line-height: 1;
-    filter: drop-shadow(0 0 6px rgba(255,215,0,0.7));
-}
-.result-winner-name {
+
+.rps-name {
     font-family: 'Permanent Marker', cursive;
-    font-size: 1.4rem;
-    color: #fff;
-    line-height: 1;
-}
-.result-score-badge {
-    background: rgba(0,210,106,0.15);
-    border: 1px solid rgba(0,210,106,0.4);
-    color: var(--accent-color);
-    font-weight: 800;
     font-size: 1rem;
-    padding: 2px 12px;
-    border-radius: 20px;
+    color: #ccc;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rps-card.rps-winner .rps-name { color: #fff; }
+
+.rps-score {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #555;
+    line-height: 1;
     font-variant-numeric: tabular-nums;
 }
-.result-game-chip {
+.rps-card.rps-winner .rps-score { color: var(--accent-color); }
+.rps-card.active:not(.rps-winner) .rps-score { color: #aaa; }
+
+/* SIEG / NIEDERLAGE Tag */
+.rps-tag {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.rps-tag-win  { background: #16a34a; color: #fff; }
+.rps-tag-loss { background: #333;    color: #666; }
+
+/* Game-Chip (solo) */
+.result-game-chip,
+.rps-game-chip {
     background: rgba(255,255,255,0.06);
     border: 1px solid #333;
     color: #666;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 2px 10px;
+    padding: 2px 8px;
     border-radius: 20px;
+    flex-shrink: 0;
 }
 
-/* ── Player Area (unter dem Banner) ─────────────────────────────────── */
-.result-player-area {
+/* Buttons rechts */
+.rps-actions {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px 8px;
-    flex-wrap: wrap;
-}
-
-/* Multiplayer: klickbare Tabs */
-.result-tab-btn {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: #777;
-    padding: 6px 18px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 0.88rem;
-    transition: all 0.18s;
-}
-.result-tab-btn:hover { background: rgba(255,255,255,0.09); color: #ccc; }
-.result-tab-btn.active {
-    background: var(--accent-color);
-    color: #000;
-    font-weight: 700;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 10px rgba(0,210,106,0.35);
-}
-
-/* Solo: Info-Badge (nicht klickbar) */
-.result-player-badge {
-    display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 8px;
-    background: rgba(99,102,241,0.1);
-    border: 1px solid rgba(99,102,241,0.25);
-    border-radius: 20px;
-    padding: 5px 16px;
+    flex-shrink: 0;
 }
-.result-badge-name { color: #a5b4fc; font-weight: 700; font-size: 0.88rem; }
-.result-badge-sep  { color: #444; }
-.result-badge-info { color: #666; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+@media (max-width: 600px) {
+    .rps-actions { flex-direction: row; flex-wrap: wrap; width: 100%; }
+    .rps-actions .btn-compact { flex: 1; }
+}
+
+/* ── Alte Winner-Bar (Legacy – kann entfernt werden sobald komplett ersetzt) */
+.result-winner-bar { display: none; }
+.result-player-area { display: none; }
 
 /* ── Content Area ────────────────────────────────────────────────────── */
 .result-content-area {
@@ -865,3 +980,39 @@
         grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
     }
 }
+
+/* ── Leg-für-Leg Analyse Tabelle (X01 Match Result) ─────────── */
+.leg-breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.leg-breakdown-table th,
+.leg-breakdown-table td { padding: 6px 10px; }
+.lbt-name {
+    text-align: left;
+    color: #888;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    min-width: 80px;
+}
+.lbt-leg {
+    text-align: center;
+    color: #555;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #222;
+}
+.lbt-cell {
+    text-align: center;
+    vertical-align: top;
+    border-left: 1px solid #1e1e1e;
+    display: table-cell;
+}
+.lbt-cell span { display: block; line-height: 1.5; }
+.lbt-f9    { font-size: 0.7rem; color: #555; }
+.lbt-darts { font-size: 0.68rem; color: #3a3a3a; }
+.lbt-active .lbt-name { color: var(--text-main); font-weight: 700; }
+.leg-breakdown-table tbody tr:nth-child(odd) { background: rgba(255,255,255,0.02); }

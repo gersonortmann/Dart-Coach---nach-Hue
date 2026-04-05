@@ -53,12 +53,12 @@ async function _handleAuthAction(e) {
     try {
         if (authMode === 'login') {
             await Store.login(email, password);
-            // SUCCESS -> Sofort weiterleiten
-            UI.showScreen('screen-dashboard'); 
+            // SUCCESS -> onLoginSuccess lädt erst State (Spieler etc.) aus Firebase, dann Dashboard
+            await UI.onLoginSuccess();
         } else {
             await Store.register(email, password);
-            // SUCCESS -> Sofort weiterleiten
-            UI.showScreen('screen-dashboard');
+            // SUCCESS -> gleiches Verhalten bei Registrierung
+            await UI.onLoginSuccess();
         }
     } catch (error) {
         console.error("Auth Error:", error);

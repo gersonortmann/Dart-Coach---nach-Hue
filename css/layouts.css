@@ -444,6 +444,8 @@
 .res-win   { background: rgba(0,210,106,0.2); color: #00d26a; }
 .res-loss  { background: rgba(239,68,68,0.2);  color: #ef4444; }
 .res-solo  { background: rgba(99,102,241,0.2); color: #818cf8; }
+.res-training { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.res-vs    { background: rgba(168,85,247,0.2); color: #a855f7; }
 
 /* ── Runden-Breakdown ─────────────────────────────────────────────────────
    Zentriert, ~55% Breite, leicht hellerer Hintergrund als die Match-Row.

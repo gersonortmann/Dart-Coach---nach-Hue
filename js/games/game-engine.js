@@ -10,16 +10,21 @@ import { AroundTheBoard } from './around-the-board.js';
 import { CheckoutChallenge } from './checkout-challenge.js';
 import { HalveIt } from './halve-it.js';
 import { ScoringDrill } from './scoring-drill.js';
+import { SegmentMaster } from './segment-master.js';
+import { Killer } from './killer.js';
+import { BotEngine } from './bot-engine.js';
 import { UI } from '../ui/ui-core.js';
 import { Management } from '../ui/ui-mgmt.js';
 
 const STRATEGY_MAP = {
     'x01': X01, 'single-training': SingleTraining, 'shanghai': Shanghai,
     'bobs27': Bobs27, 'cricket': Cricket, 'around-the-board': AroundTheBoard,
-    'checkout-challenge': CheckoutChallenge, 'halve-it': HalveIt, 'scoring-drill': ScoringDrill
+    'checkout-challenge': CheckoutChallenge, 'halve-it': HalveIt, 'scoring-drill': ScoringDrill,
+    'segment-master': SegmentMaster, 'killer': Killer
 };
 
 let isLocked = false;
+let _isBotTurn = false;  // Sperrt menschliche Eingaben während Bot-Zug
 let lastInputTime = 0;
 
 // ── Correction window ────────────────────────────────────────────────────────
@@ -82,7 +87,6 @@ function _triggerAnimation(type, duration, callback) {
 
 function _nextTurn(session) {
     isLocked = true;
-    // Korrektur-Markierung für neue Aufnahme zurücksetzen
     UI.markDartBoxCorrected(null);
     let nextPIdx = (session.currentPlayerIndex + 1) % session.players.length;
     const allFinished = session.players.every(p => p.finished);
@@ -92,16 +96,93 @@ function _nextTurn(session) {
         nextPIdx = (nextPIdx + 1) % session.players.length;
         loopCount++;
     }
+
+    // ── Smart-Modal: nur für offene Wettkampf-Spiele ─────────────────────────
+    // Rundenbasierte Spiele (jeder spielt gleich viele Runden) brauchen kein Modal.
+    const OPEN_ENDED = new Set(['around-the-board', 'x01', 'cricket', 'killer']);
+    const isOpenEnded = OPEN_ENDED.has(session.gameId);
+
+    if (isOpenEnded) {
+        const remainingNonFinished = session.players.filter(p => !p.finished);
+        const allRemainingAreBots  = remainingNonFinished.every(p => p.isBot);
+        const currentPlayer        = session.players[session.currentPlayerIndex];
+        const botJustFinished      = currentPlayer?.isBot && currentPlayer?.finished;
+        const humansRemaining      = remainingNonFinished.some(p => !p.isBot);
+
+        // Szenario A: Bot hat gerade seinen letzten Zug gemacht, Mensch ist noch dran
+        if (botJustFinished && humansRemaining) {
+            isLocked = false;
+            UI.showConfirm(
+                '🏆 GEWINNER STEHT FEST',
+                'Der Bot hat sein Spiel beendet.<br>Soll noch zu Ende gespielt werden?',
+                () => _proceedNextTurn(session, nextPIdx),
+                {
+                    confirmLabel: '▶ WEITERSPIELEN',
+                    cancelLabel:  '📊 ERGEBNIS',
+                    confirmClass: 'btn-yes',
+                    cancelClass:  'btn-no',
+                    onCancel: () => UI.showResult()
+                }
+            );
+            return;
+        }
+
+        // Szenario B: Alle Mensch-Spieler fertig, nur noch Bot übrig
+        if (allRemainingAreBots) {
+            isLocked = false;
+            UI.showConfirm(
+                '🤖 NUR NOCH BOT IM SPIEL',
+                'Alle menschlichen Spieler sind fertig.<br>Soll der Bot alleine weiterspielen?',
+                () => _proceedNextTurn(session, nextPIdx),
+                {
+                    confirmLabel: '▶ BOT WEITERSPIELEN',
+                    cancelLabel:  '📊 ERGEBNIS',
+                    confirmClass: 'btn-yes',
+                    cancelClass:  'btn-no',
+                    onCancel: () => UI.showResult()
+                }
+            );
+            return;
+        }
+    }
+
+    _proceedNextTurn(session, nextPIdx);
+}
+
+function _proceedNextTurn(session, nextPIdx) {
     let nextRoundIndex = session.roundIndex;
     if (nextPIdx === 0) nextRoundIndex++;
     State.updateSessionState({
         currentPlayerIndex: nextPIdx,
         turnTotalIndex: (session.turnTotalIndex || 0) + 1,
         roundIndex: nextRoundIndex,
-        tempDarts: []
+        tempDarts: [],
+        targetBoxMessage: null,   // Killer-Targetbox-Ergebnis löschen
     });
     isLocked = false;
-    UI.updateGameDisplay();
+
+    // ── Issue 4: Target-Box springt nicht vor Bot-Zug ────────────────────────
+    // UI-Update wird leicht verzögert damit vorheriger Dart-State noch kurz sichtbar bleibt
+    const nextSession = State.getActiveSession();
+    const nextPlayer  = nextSession?.players[nextSession.currentPlayerIndex];
+    const isNextBot   = BotEngine.isBot(nextPlayer);
+
+    // Für Bot: Display-Update nach kurzem Delay (damit 3. Dart des Vorgängers noch sichtbar bleibt)
+    const displayDelay = isNextBot ? 300 : 0;
+    setTimeout(() => UI.updateGameDisplay(), displayDelay);
+
+    // ── BOT: Zug automatisch auslösen ────────────────────────────────────────
+    if (isNextBot) {
+        _isBotTurn = true;
+        const startDelay = 600; // Bot startet erst nach kurzem Moment
+        setTimeout(() => {
+            BotEngine.scheduleTurn(nextSession, nextPlayer, (segment, dartObj) => {
+                GameEngine.onInput(segment, dartObj);
+            });
+        }, startDelay);
+    } else {
+        _isBotTurn = false;
+    }
 }
 
 /**
@@ -193,12 +274,25 @@ export const GameEngine = {
         session.players.forEach(p => { if (strategy.initPlayer) strategy.initPlayer(p, gameOptions, targets); });
         State.updateSessionState({ targets, roundIndex: 0, turnTotalIndex: 0, tempDarts: [], historyStack: [], animation: null });
         UI.switchToGame();
+
+        // Falls erster Spieler ein Bot ist, direkt starten
+        if (session) {
+            const first = session.players[0];
+            if (BotEngine.isBot(first)) {
+                _isBotTurn = true;
+                BotEngine.scheduleTurn(session, first, (seg, dartObj) => GameEngine.onInput(seg, dartObj));
+            } else {
+                _isBotTurn = false;
+            }
+        }
     },
 
-    onInput(value) {
+    onInput(value, prebuiltDart = null) {
         // Blockiert während Korrektur-Fenster (nur Dartbox-Klicks via undoSpecificDart erlaubt)
         if (_correctionTimer && !_applyingHeldDarts) return;
         if (isLocked && !_applyingHeldDarts) return;
+        // Menschliche Eingaben während Bot-Zug unterbinden
+        if (_isBotTurn && !prebuiltDart) return;
 
         const now = Date.now();
         if (!_applyingHeldDarts && now - lastInputTime < 200) return;
@@ -216,7 +310,8 @@ export const GameEngine = {
         if (player.finished) { _nextTurn(session); return; }
 
         const target = _getCurrentTarget(session);
-        const dart = normalizeDart(value, {
+        // Bot liefert fertiges Dart-Objekt, Menschen/Autodarts normalisieren
+        const dart = prebuiltDart ?? normalizeDart(value, {
             target, gameId: session.gameId,
             source: session.useAutodarts ? 'autodarts' : 'keypad'
         });
@@ -271,61 +366,76 @@ export const GameEngine = {
         // Turn-Enden (NEXT_TURN, FINISH_GAME) bekommen kein Overlay mehr – WLED übernimmt.
         const isTurnEnding = ['NEXT_TURN', 'BUST', 'FINISH_GAME'].includes(result.action);
 
+        // ── Nicht-turn-endende Overlays (Dart 1 & 2 Feedback): sofort zeigen ─
         if (result.overlay && !_applyingHeldDarts && !isTurnEnding) {
             UI.showOverlay(result.overlay.text, result.overlay.type);
         }
-        // BUST und WIN bekommen ihr Overlay weiterhin über _triggerAnimation
-        if (result.overlay && !_applyingHeldDarts && result.action === 'BUST') {
-            UI.showOverlay(result.overlay.text, result.overlay.type);
-        }
-        // NEXT_TURN mit Overlay (z.B. BUST/CHECK in Checkout Challenge)
-        if (result.overlay && !_applyingHeldDarts && result.action === 'NEXT_TURN') {
-            UI.showOverlay(result.overlay.text, result.overlay.type);
+        // Killer NEXT_TURN-Overlay → in Targetbox speichern (nicht als Popup)
+        if (result.overlay && !_applyingHeldDarts && result.action === 'NEXT_TURN'
+                && session.gameId === 'killer') {
+            State.updateSessionState({ targetBoxMessage: result.overlay.text });
         }
 
         let overlayMs = 1200;
         try { overlayMs = Management.getSettings().overlayDuration || 1200; } catch(e) {}
+
+        // Hilfsfunktion: Turn-End-Overlay verzögert einblenden
+        const _showTurnOverlay = (delayMs) => {
+            if (!result.overlay || _applyingHeldDarts) return;
+            if (session.gameId === 'killer' && result.action === 'NEXT_TURN') return;
+            setTimeout(() => UI.showOverlay(result.overlay.text, result.overlay.type), delayMs);
+        };
+
+        // ── Bot: Dart 3 → between-Delay → Overlay → overlayMs → executeAction ─
+        if (isTurnEnding && player.isBot && !_applyingHeldDarts) {
+            UI.updateGameDisplay();
+            isLocked = true;
+            const botDelay = BotEngine.getBetweenDelay(player);
+            _showTurnOverlay(botDelay);
+            setTimeout(() => {
+                isLocked = false;
+                _executeAction(result, session, player, strategy, overlayMs);
+            }, botDelay + overlayMs);
+            return;
+        }
 
         // ── Korrektur-Fenster nach Dart 3 ────────────────────────────────────
         let corrWindowMs = 0;
         try { corrWindowMs = (Management.getSettings().correctionWindow ?? 3.0) * 1000; } catch(e) { corrWindowMs = 3000; }
 
         if (isTurnEnding && corrWindowMs > 0 && !_applyingHeldDarts) {
-            
-            // 1. UI sofort aktualisieren, damit der 3. Dart in der Liste erscheint
-            UI.updateGameDisplay();
-            
-            // 2. Eingabe kurz sperren, damit während der Farbeffekt-Zeit nichts passiert
+            UI.updateGameDisplay(); // Dart 3 sofort zeigen
             isLocked = true;
-
-            // 3. Verzögerung starten (z.B. 1000ms), damit Grün/Rot sichtbar bleibt
-            // Erst danach wird auf Amber geschaltet.
             setTimeout(() => {
-                isLocked = false; // Sperre aufheben, Correction-Timer übernimmt gleich
-
+                isLocked = false;
                 _lastAppliedResult  = result;
                 _lastTurnEndResult  = result;
                 _lastTurnEndContext = { session, player, strategy, overlayMs };
-
-                // JETZT erst Amber auslösen
                 EventBus.emit('GAME_EVENT', { type: 'correction-window', duration: corrWindowMs });
-
                 UI.showCorrectionCountdown(corrWindowMs, () => {
-                    _correctionTimer = null;
+                    _correctionTimer    = null;
                     _lastTurnEndResult  = null;
                     _lastTurnEndContext = null;
                     EventBus.emit('GAME_EVENT', { type: 'correction-window-end' });
-                    _executeAction(result, session, player, strategy, overlayMs);
+                    // Overlay NACH dem Correction Window
+                    _showTurnOverlay(0);
+                    setTimeout(() => _executeAction(result, session, player, strategy, overlayMs), overlayMs);
                 });
-                
-                // Timer für die interne Logik setzen
                 _correctionTimer = setTimeout(() => {}, corrWindowMs);
-                
-                // Display update, damit der Countdown-Balken erscheint (falls nötig)
                 UI.updateGameDisplay();
-
             }, 500);
-            
+            return;
+        }
+
+        // ── Kein Korrektur-Fenster (Mensch): Dart 3 → Overlay → overlayMs → weiter ─
+        if (isTurnEnding && corrWindowMs === 0 && !_applyingHeldDarts) {
+            UI.updateGameDisplay();
+            isLocked = true;
+            _showTurnOverlay(0);
+            setTimeout(() => {
+                isLocked = false;
+                _executeAction(result, session, player, strategy, overlayMs);
+            }, overlayMs);
             return;
         }
 
@@ -357,12 +467,22 @@ export const GameEngine = {
         _cancelCorrectionWindow();
         const session = State.getActiveSession();
         if (!session || !session.historyStack?.length) return;
-        const snap = JSON.parse(session.historyStack.pop());
+
+        // Solange poppen bis wir bei einem menschlichen Spieler landen
+        let snap;
+        do {
+            if (!session.historyStack.length) break;
+            snap = JSON.parse(session.historyStack.pop());
+        } while (snap && session.players[snap.pIdx]?.isBot);
+
+        if (!snap) return;
+
         session.currentPlayerIndex = snap.pIdx;
         session.roundIndex         = snap.rIdx;
         session.turnTotalIndex     = snap.turnTotal;
         session.players            = snap.players;
         session.tempDarts          = snap.tempDarts;
+        _isBotTurn = false; // Sicherstellen dass Eingabe wieder aktiv ist
         _heldDarts = null;
         UI.updateGameDisplay();
     },

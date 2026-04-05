@@ -60,6 +60,33 @@ export const State = {
         }
         return false;
     },
+
+    saveDiagnosticProfile: async function(playerId, scores) {
+        const user = _state.availablePlayers.find(u => u.id === playerId);
+        if (user) {
+            user.diagnosticProfile = {
+                scores,
+                date: Date.now(),
+            };
+            await Store.saveUser(user);
+            return true;
+        }
+        return false;
+    },
+
+    addTrendEntry: async function(playerId, entry) {
+        // entry: { date, axis, score, gameId }
+        const user = _state.availablePlayers.find(u => u.id === playerId);
+        if (!user) return false;
+        if (!user.trendEntries) user.trendEntries = [];
+        user.trendEntries.push(entry);
+        // Auf maximal 200 Einträge begrenzen (älteste zuerst raus)
+        if (user.trendEntries.length > 200) {
+            user.trendEntries = user.trendEntries.slice(-200);
+        }
+        await Store.saveUser(user);
+        return true;
+    },
     
     // --- X01 STATISTIK (Bestehend) ---
     calculateMatchStats: function(player, session) {
@@ -115,25 +142,49 @@ export const State = {
     },
 
     // --- FIX: SINGLE TRAINING STATISTIK ---
-    _calculateSingleTrainingStats: function(player) {
-        // KORREKTUR: Zugriff auf 'darts' statt 'throws'
-        const allDarts = player.turns.flatMap(t => t.darts || []);
+    _calculateSingleTrainingStats: function(player, session) {
+        let hitCount = 0;
+        let allDartsCount = 0;
+
+        player.turns.forEach((turn, i) => {
+            // Das Ziel dieser Runde ermitteln (Fallback: 1-20, 25)
+            const target = session.targets?.[i] ?? (i < 20 ? i + 1 : 25);
+            
+            if (turn.darts) {
+                turn.darts.forEach(d => {
+                    allDartsCount++;
+                    
+                    // 1. Prüfen ob das Spiel schon gesagt hat "Treffer"
+                    if (d._isHit) {
+                        hitCount++;
+                    }
+                    // 2. Sicherheitsnetz: Falls _isHit fehlt, prüfen wir manuell
+                    // Ein Treffer ist es nur, wenn Wurf-Basis == Ziel-Nummer
+                    else {
+                        const base = d.base || (d.val ? d.val.base : 0);
+                        const isMiss = d.isMiss || (d.val ? d.val.isMiss : false);
+                        
+                        // WICHTIG: base muss target entsprechen!
+                        if (!isMiss && base === target) {
+                            hitCount++;
+                        }
+                    }
+                });
+            }
+        });
         
-        // KORREKTUR: Filterung auf Basis des Objekts { val: { isMiss: ... } }
-        const hits = allDarts.filter(d => d.val && !d.val.isMiss);
+        const hitRate = allDartsCount > 0 ? ((hitCount / allDartsCount) * 100).toFixed(1) : '0.0';
         
         return {
-            totalDarts: allDarts.length,
-            hitCount: hits.length,
-            accuracy: allDarts.length > 0 ? ((hits.length / allDarts.length) * 100).toFixed(2) : "0.00",
-            
-            // Zugriff auf Multiplier im verschachtelten Objekt d.val.multiplier
-            singles: hits.filter(d => d.val.multiplier === 1).length,
-            doubles: hits.filter(d => d.val.multiplier === 2).length,
-            triples: hits.filter(d => d.val.multiplier === 3).length,
-            
-            dartsPerTarget: (allDarts.length / 21).toFixed(2),
-            totalScore: player.currentResidual // Der Gesamtscore
+            totalScore: player.currentResidual,
+            totalDarts: allDartsCount,
+            hitCount: hitCount,
+            hitRate: hitRate,
+            accuracy: hitRate, 
+            summary: {
+                score: player.currentResidual,
+                hitRate: hitRate,
+            }
         };
     },
 
@@ -141,10 +192,20 @@ export const State = {
         const session = _state.activeSession;
         if(!session) return;
         
-        const planData = _state.activePlan ? { /* ... */ } : null; // (Dein bestehender Code)
+        // ── Plan-Kontext: Speichert, ob dieses Spiel Teil eines Trainingsplans war ──
+        const planData = _state.activePlan ? {
+            planId:   _state.activePlan.id,
+            planName: _state.activePlan.name,
+            sessionId: _state.activePlan.sessionId,
+            blockIndex: _state.activePlan.currentBlockIndex
+        } : null;
 
-        // --- NEU: WINNER ERMITTELN (Für Statistik) ---
-        // Bei X01 ist es komplexer (Sets/Legs), bei Training zählt der Score.
+        // ── Match-Kontext: 'multiplayer' | 'training' | 'solo' ──
+        const isMultiplayer = session.players.length > 1;
+        const isTraining    = !!planData;
+        const matchContext  = isMultiplayer ? 'multiplayer' : (isTraining ? 'training' : 'solo');
+
+        // --- WINNER ERMITTELN (Für Statistik) ---
         let winnerId = null;
         
         if (session.gameId === 'x01') {
@@ -155,13 +216,23 @@ export const State = {
             });
             winnerId = sorted[0].id;
         } else {
-            // Training/Shanghai: Höchster Score gewinnt
-            const sorted = [...session.players].sort((a,b) => b.currentResidual - a.currentResidual);
+            // Spiele mit player.score: checkout-challenge, halve-it, scoring-drill, cricket
+            // Spiele mit currentResidual: bobs27, shanghai, single-training, around-the-board
+            const scoreGames = ['checkout-challenge', 'halve-it', 'scoring-drill', 'cricket'];
+            const useScore = scoreGames.includes(session.gameId);
+            const sorted = [...session.players].sort((a,b) => {
+                const aVal = useScore ? (a.score || 0) : (a.currentResidual || 0);
+                const bVal = useScore ? (b.score || 0) : (b.currentResidual || 0);
+                return bVal - aVal;
+            });
             winnerId = sorted[0].id;
         }
         // ----------------------------------------------
 
         const savePromises = session.players.map(async (p) => {
+            // Bots haben kein Firebase-Konto → nicht speichern
+            if (p.isBot) return;
+
             const user = _state.availablePlayers.find(u => u.id === p.id);
             if(user) {
                 if(!user.history) user.history = [];
@@ -179,8 +250,8 @@ export const State = {
                     };
                 }
                 else if (session.gameId === 'single-training' || session.gameId === 'shanghai') {
-                    matchStats = this._calculateSingleTrainingStats(p);
-                }
+					matchStats = this._calculateSingleTrainingStats(p, session); // <--- session hier übergeben!
+				}
                 else if (session.gameId === 'halve-it') {
                     const allThrows = p.turns.flatMap(t => t.darts || []);
                     const totalRounds = p.turns.length;
@@ -240,6 +311,7 @@ export const State = {
                     matchId: 'm_' + Date.now() + '_' + p.id,
                     date: session.timestamp,
                     game: session.gameId,
+                    matchContext: matchContext,
                     settings: settingsToSave,
                     stats: matchStats, 
                     totalScore: matchStats.totalScore || 0, 
@@ -255,6 +327,48 @@ export const State = {
 
         await Promise.all(savePromises);
         _state.activeSession = null; 
+    },
+
+    // ─── BOT MANAGEMENT ───────────────────────────────────────────────────────
+
+    /**
+     * Stellt sicher, dass mindestens ein Bot-Spieler in der Spielerliste existiert.
+     * Legt ihn an falls nötig. Wird beim App-Start nach initAfterLogin() aufgerufen.
+     */
+    ensureBotPlayers: async function(botSettings) {
+        const existing = _state.availablePlayers.filter(p => p.isBot);
+        if (existing.length > 0) {
+            // Einstellungen aktualisieren falls nötig
+            existing.forEach(b => {
+                b.botDifficulty = botSettings?.difficulty ?? b.botDifficulty ?? 60;
+                b.botSpeed      = botSettings?.speed      ?? b.botSpeed      ?? 'medium';
+            });
+            return existing;
+        }
+        // Standard-Bot anlegen
+        const bot = {
+            id: 'bot_default',
+            name: '🤖 Bot',
+            isBot: true,
+            botDifficulty: botSettings?.difficulty ?? 60,
+            botSpeed:      botSettings?.speed      ?? 'medium',
+            history: []
+        };
+        _state.availablePlayers.push(bot);
+        await Store.saveUser(bot);
+        return [bot];
+    },
+
+    getBotPlayers: function() {
+        return _state.availablePlayers.filter(p => p.isBot);
+    },
+
+    updateBotSettings: async function(botId, difficulty, speed) {
+        const bot = _state.availablePlayers.find(p => p.id === botId);
+        if (!bot) return;
+        bot.botDifficulty = difficulty;
+        bot.botSpeed      = speed;
+        await Store.saveUser(bot);
     },
 
     deleteGameFromHistory: async function(playerId, gameIndexInArray) {
@@ -274,6 +388,9 @@ export const State = {
             .map(p => ({
                 id: p.id,
                 name: p.name,
+                isBot: p.isBot ?? false,
+                botDifficulty: p.botDifficulty ?? 60,
+                botSpeed: p.botSpeed ?? 'medium',
                 turns: [],
                 progressIndex: 0,
                 finished: false,

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "react-server-dom-webpack": "^19.2.4"
+  }
+}

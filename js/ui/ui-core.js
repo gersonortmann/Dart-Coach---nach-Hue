@@ -22,7 +22,9 @@ const GAME_NAMES = {
 	'bobs27': "Bob's 27",
 	'checkout-challenge': 'Checkout Challenge',
 	'halve-it': 'Halve It',
-	'scoring-drill': 'Scoring Drill'
+	'scoring-drill': 'Scoring Drill',
+	'segment-master': 'Segment Master',
+	'killer': 'Killer'
     /* CLEAN SWEEP: Andere Spiele vorerst deaktiviert
     'warmup': 'Warmup Routine',
     'catch40': 'Catch 40',
@@ -91,8 +93,13 @@ function _getGameTitle() {
         if (type === 'x01') {
             title = `${settings.startScore}`;
             let details = [];
-            const modeLabel = settings.mode === 'sets' ? 'Sets' : 'Legs';
-            details.push(`Best of ${settings.bestOf} ${modeLabel}`);
+            if (settings.startScore === 170) {
+                // 170 Checkout-Training: "5 Runden" statt "Best of 5 Legs"
+                details.push(`${settings.bestOf} Runden`);
+            } else {
+                const modeLabel = settings.mode === 'sets' ? 'Sets' : 'Legs';
+                details.push(`Best of ${settings.bestOf} ${modeLabel}`);
+            }
             if (settings.doubleIn) details.push("Double In");
             if (settings.doubleOut) details.push("Double Out");
             if (details.length > 0) title += ` (${details.join(', ')})`;
@@ -139,6 +146,18 @@ function _getGameTitle() {
         // --- CRICKET LOGIK ---
         else if (type === 'cricket') {
             if (settings.spRounds) title += ` (${settings.spRounds} Runden)`;
+        }
+        // --- SEGMENT MASTER LOGIK ---
+        else if (type === 'segment-master') {
+            const seg      = settings.segment === 25 ? 'Bull' : `S${settings.segment ?? 20}`;
+            const zoneMap  = { any:'', single:' Single', inner:' Inner', outer:' Outer', double:' Double', triple:' Triple' };
+            const zone     = zoneMap[settings.zone ?? 'any'] || '';
+            const turns    = settings.turnLimit ?? 10;
+            title = `Segment Master: ${seg}${zone} · ${turns} Aufnahmen`;
+        }
+        // --- KILLER LOGIK ---
+        else if (type === 'killer') {
+            title = `Killer · ${settings.lives ?? 3} Leben`;
         }
 
         return title.toUpperCase();
@@ -257,6 +276,7 @@ function _showConfirm(title, message, onConfirm, options = {}) {
 
     btnCancel.onclick = () => {
         close();
+        if (options.onCancel) options.onCancel();
     };
 }
 
@@ -409,7 +429,12 @@ export const UI = {
 	
 
     onLoginSuccess: async function() { 
-        await State.initAfterLogin(); 
+        await State.initAfterLogin();
+        // Bot-Spieler sicherstellen (wird einmalig angelegt falls noch nicht vorhanden)
+        try {
+            const botSettings = Management.getSettings()?.bot;
+            await State.ensureBotPlayers(botSettings);
+        } catch(e) { console.warn('Bot init skipped:', e); }
         this.showScreen('screen-dashboard'); 
     },
 
@@ -490,8 +515,8 @@ export const UI = {
 
         // Widget-Inhalt neu strukturieren für Dual-System
         widget.innerHTML = `
-            <span id="light-hue-btn"  class="light-indicator" title="Hue Einstellungen">💡<span id="light-hue-dot"  class="light-dot"></span></span>
-            <span id="light-wled-btn" class="light-indicator" title="WLED Einstellungen">🌈<span id="light-wled-dot" class="light-dot"></span></span>
+            <span id="light-hue-btn"  class="light-indicator" title="Hue an/aus" style="cursor:pointer;">💡<span id="light-hue-dot"  class="light-dot"></span></span>
+            <span id="light-wled-btn" class="light-indicator" title="WLED an/aus" style="cursor:pointer;">🌈<span id="light-wled-dot" class="light-dot"></span></span>
         `;
         widget.style.cursor = 'default';
         widget.style.gap = '8px';
@@ -499,25 +524,25 @@ export const UI = {
         // Dot-Farben aktualisieren
         const _update = () => {
             const status = LightingCoordinator.getStatus();
-            _setDot(document.getElementById('light-hue-dot'),  status.hue);
-            _setDot(document.getElementById('light-wled-dot'), status.wled);
+            _setDot(document.getElementById('light-hue-dot'),  status.hue,  document.getElementById('light-hue-btn'));
+            _setDot(document.getElementById('light-wled-dot'), status.wled, document.getElementById('light-wled-btn'));
         };
 
-        function _setDot(dotEl, info) {
+        function _setDot(dotEl, info, btnEl) {
             if (!dotEl) return;
             if (!info.enabled) {
                 dotEl.className = 'light-dot dot-off';
-                dotEl.title = `${info.label}: Aus`;
+                if (btnEl) btnEl.title = `${info.label}: Aus – Klick zum Einschalten`;
             } else if (info.connected) {
                 dotEl.className = 'light-dot dot-on';
-                dotEl.title = `${info.label}: Verbunden`;
+                if (btnEl) btnEl.title = `${info.label}: Verbunden – Klick zum Ausschalten`;
             } else {
                 dotEl.className = 'light-dot dot-error';
-                dotEl.title = `${info.label}: Verbindungsfehler`;
+                if (btnEl) btnEl.title = `${info.label}: Verbindungsfehler – Klick für Einstellungen`;
             }
         }
 
-        // Click-Handler: direkt zum richtigen Mgmt-Tab springen
+        // Click-Handler: Toggle bei grün/grau, Management öffnen bei Fehler (orange)
         const hueBtn  = widget.querySelector('#light-hue-btn');
         const wledBtn = widget.querySelector('#light-wled-btn');
 
@@ -529,8 +554,28 @@ export const UI = {
             this.showScreen('screen-management');
         };
 
-        if (hueBtn)  hueBtn.onclick  = (e) => { e.stopPropagation(); _openMgmt('hue'); };
-        if (wledBtn) wledBtn.onclick = (e) => { e.stopPropagation(); _openMgmt('wled'); };
+        if (hueBtn) hueBtn.onclick = (e) => {
+            e.stopPropagation();
+            const info = HueService.getStatusInfo();
+            // Fehler (aktiviert, aber nicht verbunden) → Management öffnen
+            if (info.enabled && !info.connected) {
+                _openMgmt('hue');
+            } else {
+                HueService.toggleEnabled();
+                _update();
+            }
+        };
+
+        if (wledBtn) wledBtn.onclick = (e) => {
+            e.stopPropagation();
+            const info = WledService.getStatusInfo();
+            if (info.enabled && !info.connected) {
+                _openMgmt('wled');
+            } else {
+                WledService.toggleEnabled();
+                _update();
+            }
+        };
 
         // Initialer Update + Live-Updates bei Status-Änderung
         _update();

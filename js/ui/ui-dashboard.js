@@ -2,6 +2,7 @@ import { State } from '../core/state.js';
 import { UI } from './ui-core.js';
 import { TRAINING_PLANS } from '../games/training-plans.js';
 import { Setup } from './ui-setup.js';
+import { StatsService } from '../core/stats-service.js';
 
 // ─── GAME METADATA ─────────────────────────────────────────────
 const GAMES = {
@@ -17,11 +18,15 @@ const GAMES = {
 	'checkout-challenge': { label: 'Checkout Challenge', category: 'training', accent: '#e11d48', icon: '🔥', desc: 'Checke 80, 130, 170... in 9 Darts!' },
 	'halve-it': { label: 'Halve It', category: 'training', accent: '#f59e0b', icon: '✂️', desc: 'Triff oder dein Score wird halbiert!' },
 	'scoring-drill': { label: 'Scoring Drill', category: 'training', accent: '#0ea5e9', icon: '📈', desc: '99 Darts Highscore Jagd' },
+	'segment-master': { label: 'Segment Master', category: 'training', accent: '#8b5cf6', icon: '🎯', desc: 'Beherrsche ein Segment in 30 Darts' },
+    'killer': { label: 'Killer', category: 'match', accent: '#dc2626', icon: '🔪', desc: 'Letzter Überlebender gewinnt' },
 	
 	// ── PLÄNE ──
-    'warmup-quick': { label: 'Quick Warm-Up', category: 'plan', accent: '#8b5cf6', icon: '🔥', desc: '10 Min · Scoring & ATB' },
-    'checkout-pro': { label: 'Finishing School', category: 'plan', accent: '#10b981', icon: '🎯', desc: '20 Min · Checkouts & Bobs' },
-    'full-workout': { label: 'The Grinder', category: 'plan', accent: '#6366f1', icon: '💪', desc: '45 Min · Das Komplettprogramm' },
+    'warmup-quick':    { label: 'Quick Warm-Up',     category: 'plan', accent: '#8b5cf6', icon: '🔥', desc: '10 Min · Scoring & ATB' },
+    'checkout-pro':    { label: 'Finishing School',   category: 'plan', accent: '#10b981', icon: '🎯', desc: '20 Min · Checkouts & Bobs' },
+    'full-workout':    { label: 'The Grinder',        category: 'plan', accent: '#6366f1', icon: '💪', desc: '45 Min · Das Komplettprogramm' },
+    'double-trouble':  { label: 'Double Trouble',     category: 'plan', accent: '#ef4444', icon: '🔴', desc: '25 Min · Bobs, Doppel & Checkout' },
+    'the-diagnostic':  { label: 'The Diagnostic',     category: 'plan', accent: '#f59e0b', icon: '📊', desc: '30 Min · Dein Stärken-Profil' },
 };
 
 // ─── PRIVATE STATE ─────────────────────────────────────────────
@@ -43,10 +48,12 @@ export const Dashboard = {
         if (!container) return;
 
         const player = this._getActivePlayer();
-        const players = State.getAvailablePlayers() || [];
+        const allPlayers = State.getAvailablePlayers() || [];
+        const players = allPlayers.filter(p => !p.isBot);
 
         container.innerHTML = `
             ${this._renderHeader(player, players)}
+            ${this._renderDiagnosticProfile(player)}
             ${this._renderMatchSection(player)}
             ${this._renderTrainingSection(player)}
             ${this._renderTrainingPlanSection()}
@@ -103,6 +110,125 @@ export const Dashboard = {
                 <p class="dash-subtitle">Jeder Dart zählt. Heute wirst du besser als gestern.</p>
             </div>
         `;
+    },
+
+    _renderDiagnosticProfile(player) {
+        const profile = player?.diagnosticProfile;
+        if (!profile?.scores) return '';
+
+        const scores     = profile.scores;
+        const date       = profile.date ? new Date(profile.date).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '';
+        const trendScores = StatsService.getLatestTrendScores(player.id);
+
+        const axes = [
+            { key: 'scoring',   label: 'Scoring',   emoji: '📈', color: '#0ea5e9' },
+            { key: 'doubles',   label: 'Doppel',    emoji: '🎯', color: '#10b981' },
+            { key: 'checkout',  label: 'Checkout',  emoji: '✅', color: '#f59e0b' },
+            { key: 'precision', label: 'Präzision', emoji: '🔬', color: '#8b5cf6' },
+            { key: 'match',     label: 'Match',     emoji: '⚔️', color: '#ef4444' },
+        ];
+
+        const overall      = Math.round(axes.reduce((s, a) => s + (scores[a.key] ?? 0), 0) / axes.length);
+        const overallColor = overall >= 70 ? '#10b981' : overall >= 40 ? '#f59e0b' : '#ef4444';
+
+        const barsHtml = axes.map(a => {
+            const val   = scores[a.key] ?? 0;
+            const hint  = val >= 70 ? 'Stärke' : val >= 40 ? 'Solide' : 'Üben';
+            const t     = trendScores[a.key];
+            const trendHtml = t
+                ? `<span class="diag-trend diag-trend-${t.trend === '↑' ? 'up' : t.trend === '↓' ? 'down' : 'flat'}">${t.trend}${t.delta !== null ? (t.delta > 0 ? '+' : '') + t.delta : ''}</span>`
+                : '';
+            return `
+                <div class="diag-bar-row">
+                    <span class="diag-bar-label">${a.emoji} ${a.label}</span>
+                    <div class="diag-bar-track">
+                        <div class="diag-bar-fill" style="width:${val}%; background:${a.color};"></div>
+                    </div>
+                    <span class="diag-bar-val" style="color:${a.color}">${val}</span>
+                    <span class="diag-bar-hint">${hint}</span>
+                    ${trendHtml}
+                </div>`;
+        }).join('');
+
+        const canvasId = 'dash-diag-radar';
+
+        return `
+            <div class="diag-profile-card dash-acc-item" id="diag-acc-item">
+                <div class="diag-acc-header" id="diag-acc-toggle">
+                    <div class="diag-header-left">
+                        <span class="diag-acc-icon">📊</span>
+                        <div>
+                            <div class="diag-title">STÄRKEN-PROFIL</div>
+                            <div class="diag-subtitle">The Diagnostic · ${date}</div>
+                        </div>
+                    </div>
+                    <div class="diag-header-right">
+                        <div class="diag-overall" style="color:${overallColor}">${overall}<span class="diag-overall-sub">/100</span></div>
+                        <span class="dash-acc-arrow">▼</span>
+                    </div>
+                </div>
+                <div class="diag-acc-content">
+                    <div class="diag-body">
+                        <canvas id="${canvasId}" class="diag-radar-canvas" width="200" height="200"></canvas>
+                        <div class="diag-bars">${barsHtml}</div>
+                    </div>
+                    <div class="diag-footer">
+                        Starte <strong>The Diagnostic</strong> erneut um dein Profil zu aktualisieren.
+                    </div>
+                </div>
+            </div>`;
+    },
+
+    _drawDashDiagRadar(canvasId, axes, scores) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        const R  = Math.min(cx, cy) - 20;
+        const n  = axes.length;
+        const toRad = i => (Math.PI * 2 * i / n) - Math.PI / 2;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Gitter
+        [20, 40, 60, 80, 100].forEach(lvl => {
+            ctx.beginPath();
+            axes.forEach((_, i) => {
+                const r = R * lvl / 100;
+                const x = cx + r * Math.cos(toRad(i)), y = cy + r * Math.sin(toRad(i));
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.closePath();
+            ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1; ctx.stroke();
+        });
+
+        // Achsen
+        axes.forEach((_, i) => {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + R * Math.cos(toRad(i)), cy + R * Math.sin(toRad(i)));
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+        });
+
+        // Fläche
+        ctx.beginPath();
+        axes.forEach((a, i) => {
+            const r = R * (scores[a.key] ?? 0) / 100;
+            const x = cx + r * Math.cos(toRad(i)), y = cy + r * Math.sin(toRad(i));
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.fillStyle   = 'rgba(234,179,8,0.15)';
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth   = 2; ctx.fill(); ctx.stroke();
+
+        // Punkte
+        axes.forEach((a, i) => {
+            const r = R * (scores[a.key] ?? 0) / 100;
+            ctx.beginPath();
+            ctx.arc(cx + r * Math.cos(toRad(i)), cy + r * Math.sin(toRad(i)), 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#eab308'; ctx.fill();
+        });
     },
 
     _renderMatchSection(player) {
@@ -317,6 +443,31 @@ export const Dashboard = {
                 UI.showScreen('screen-management');
             };
         }
+
+        // 5. Diagnostic Radar zeichnen (nach DOM-Aufbau)
+        const player = this._getActivePlayer();
+        if (player?.diagnosticProfile?.scores) {
+            const axes = [
+                { key: 'scoring' }, { key: 'doubles' }, { key: 'checkout' },
+                { key: 'precision' }, { key: 'match' }
+            ];
+
+            // Toggle-Handler
+            const toggle = document.getElementById('diag-acc-toggle');
+            const item   = document.getElementById('diag-acc-item');
+            if (toggle && item) {
+                toggle.onclick = () => {
+                    const opening = !item.classList.contains('open');
+                    item.classList.toggle('open', opening);
+                    // Radar erst zeichnen wenn sichtbar
+                    if (opening) {
+                        setTimeout(() => this._drawDashDiagRadar('dash-diag-radar', axes, player.diagnosticProfile.scores), 50);
+                    }
+                };
+            }
+
+            // Standardmäßig zugeklappt – kein Radar-Zeichnen beim Start nötig
+        }
     },
 
     _openGame(gameId) {
@@ -353,24 +504,34 @@ export const Dashboard = {
 
         switch (gameId) {
             case 'x01': {
-                const avg = latest.stats?.summary?.avg;
-                return avg ? { label: `Avg ${avg}`, time } : { label: `${games.length} Spiele`, time };
+                // Bestes (niedrigstes) Average
+                const avgs = games.map(g => parseFloat(g.stats?.summary?.avg)).filter(v => !isNaN(v) && v > 0);
+                const best = avgs.length > 0 ? Math.max(...avgs).toFixed(1) : null;
+                return best ? { label: `Best Avg ${best}`, time } : { label: `${games.length} Spiele`, time };
             }
             case 'cricket': {
-                const mpr = latest.stats?.summary?.mpr;
-                return mpr ? { label: `MPR ${mpr}`, time } : { label: `${games.length} Spiele`, time };
+                const mprs = games.map(g => parseFloat(g.stats?.summary?.mpr)).filter(v => !isNaN(v) && v > 0);
+                const best = mprs.length > 0 ? Math.max(...mprs).toFixed(2) : null;
+                return best ? { label: `Best MPR ${best}`, time } : { label: `${games.length} Spiele`, time };
             }
             case 'single-training': {
-                const hr = latest.stats?.summary?.hitRate || latest.stats?.summary?.accuracy;
-                return hr ? { label: `${hr}% Hit-Rate`, time } : { label: `Score: ${latest.totalScore || '-'}`, time };
+                // Beste (höchste) Hit-Rate
+                const rates = games.map(g => {
+                    const hr = g.stats?.summary?.hitRate ?? g.stats?.hitRate ?? g.stats?.accuracy;
+                    return parseFloat(hr);
+                }).filter(v => !isNaN(v));
+                const best = rates.length > 0 ? Math.max(...rates).toFixed(1) : null;
+                return best ? { label: `Best ${best}% Quote`, time } : { label: `Score: ${latest.totalScore || '-'}`, time };
             }
             case 'shanghai': {
                 const best = Math.max(...games.map(g => g.totalScore || 0));
                 return { label: `PB: ${best}`, time };
             }
             case 'bobs27': {
-                const best = Math.max(...games.map(g => g.totalScore || 0));
-                return { label: `PB: ${best}`, time };
+                // Beste erreichte Runde + bester Score
+                const bestRounds = Math.max(...games.map(g => g.turns?.length || 0));
+                const bestScore = Math.max(...games.map(g => g.totalScore || 0));
+                return { label: `R${bestRounds} · ${bestScore}pts`, time };
             }
             case 'around-the-board': {
                 const scores = games.map(g => g.totalScore).filter(Boolean);
@@ -379,9 +540,28 @@ export const Dashboard = {
                 return { label: `⚡ ${best} Darts`, time };
             }
 			case 'checkout-challenge': {
-                // Wir zeigen die Rate an, z.B. "50% Checkouts"
-                const rate = latest.stats?.summary?.checkoutRate || "0%";
-                return { label: `Rate: ${rate}`, time };
+                // Beste Checkout-Rate
+                const rates = games.map(g => parseInt(g.stats?.summary?.checkoutRate)).filter(v => !isNaN(v));
+                const best = rates.length > 0 ? Math.max(...rates) : 0;
+                return { label: `Best: ${best}%`, time };
+            }
+            case 'halve-it': {
+                const best = Math.max(...games.map(g => g.stats?.summary?.score ?? g.totalScore ?? 0));
+                return { label: `PB: ${best}`, time };
+            }
+            case 'scoring-drill': {
+                const avgs = games.map(g => parseFloat(g.stats?.summary?.avg ?? g.stats?.avg)).filter(v => !isNaN(v) && v > 0);
+                const best = avgs.length > 0 ? Math.max(...avgs).toFixed(1) : null;
+                return best ? { label: `Best PPT: ${best}`, time } : { label: `${games.length} Spiele`, time };
+            }
+            case 'segment-master': {
+                const best = Math.max(...games.map(g => g.stats?.summary?.score ?? g.totalScore ?? 0));
+                return { label: `PB: ${best} Pkt`, time };
+            }
+            case 'killer': {
+                const wins   = games.filter(g => g.stats?.summary?.survived).length;
+                const rate   = Math.round((wins / games.length) * 100);
+                return { label: `Survival: ${rate}%`, time };
             }
             default:
                 return { label: `${games.length} Spiele`, time };
@@ -394,13 +574,13 @@ export const Dashboard = {
 
     _ensureActivePlayer() {
         if (activePlayerId) return;
-        const players = State.getAvailablePlayers() || [];
+        const players = (State.getAvailablePlayers() || []).filter(p => !p.isBot);
         if (players.length > 0) activePlayerId = players[0].id;
     },
 
     _getActivePlayer() {
         if (!activePlayerId) return null;
-        return (State.getAvailablePlayers() || []).find(p => p.id === activePlayerId) || null;
+        return (State.getAvailablePlayers() || []).find(p => p.id === activePlayerId && !p.isBot) || null;
     },
 
     _getGreeting() {

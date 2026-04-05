@@ -35,6 +35,11 @@ const DEFAULT_SETTINGS = {
     overlayDuration: 1200,
     correctionWindow: 1.5,
     speechEnabled: false,
+    bot: {
+        difficulty: 60,   // 30–100 in 5er Schritten
+        speed: 'medium',  // instant | fast | medium | slow
+        inTrainingPlans: false,
+    },
     defaults: {
         x01: { startScore: 501, doubleIn: false, doubleOut: true, mode: 'legs', bestOf: 3 },
         cricket: { mode: 'standard', spRounds: 20 },
@@ -185,6 +190,35 @@ export const Management = {
             </div>
         `);
 
+        // ── BOT ─────────────────────────────────────────────────────────────
+        const bot = s.bot || {};
+        const diffSteps = [30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
+        const speedOpts = [
+            { v:'instant', l:'Sofort' }, { v:'fast', l:'Schnell' },
+            { v:'medium',  l:'Mittel' }, { v:'slow', l:'Langsam' }
+        ];
+        html += this._section('🤖 Bot-Einstellungen', `
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">Spielstärke (Average)</label>
+                <div class="mgmt-chips" style="flex-wrap:wrap;gap:6px;">
+                    ${diffSteps.map(v => `<button class="mgmt-chip ${(bot.difficulty??60)===v?'active':''}" data-g="bot-diff" data-v="${v}">${v}er</button>`).join('')}
+                </div>
+            </div>
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">Wurf-Geschwindigkeit</label>
+                <div class="mgmt-chips">
+                    ${speedOpts.map(o => `<button class="mgmt-chip ${(bot.speed??'medium')===o.v?'active':''}" data-g="bot-spd" data-v="${o.v}">${o.l}</button>`).join('')}
+                </div>
+            </div>
+            <div class="mgmt-field">
+                <label class="mgmt-lbl">In Trainingsplänen</label>
+                <div class="mgmt-toggle-row">
+                    <button id="set-bot-plans" class="mgmt-toggle ${bot.inTrainingPlans?'on':''}">${bot.inTrainingPlans?'AN':'AUS'}</button>
+                    <span class="mgmt-hint" style="margin:0;">Bot als Gegner in Trainingsplan-Spielen</span>
+                </div>
+            </div>
+        `);
+
         html += `<h4 style="margin: 20px 0 10px 0; color: #888; text-transform:uppercase; font-size:0.8rem; letter-spacing:1px;">Spielvorgaben (Defaults)</h4>`;
 
         // 2. Definition der Spiele und ihrer Settings-Blöcke
@@ -252,6 +286,16 @@ export const Management = {
             appSettings.speechEnabled = !appSettings.speechEnabled; _saveSettings();
             btnSpeech.classList.toggle('on', appSettings.speechEnabled);
             btnSpeech.textContent = appSettings.speechEnabled ? 'AN' : 'AUS';
+        };
+
+        const btnBotPlans = el.querySelector('#set-bot-plans');
+        if (btnBotPlans) btnBotPlans.onclick = () => {
+            if (!appSettings.bot) appSettings.bot = {};
+            appSettings.bot.inTrainingPlans = !appSettings.bot.inTrainingPlans;
+            _saveSettings();
+            btnBotPlans.classList.toggle('on', appSettings.bot.inTrainingPlans);
+            btnBotPlans.textContent = appSettings.bot.inTrainingPlans ? 'AN' : 'AUS';
+            this._flash(btnBotPlans);
         };
 
         // Chips Logic (Global für alle Spiele)
@@ -485,6 +529,19 @@ export const Management = {
 
             // Scoring Drill
             case 'sd-lim':  d['scoring-drill'].dartLimit = parseInt(v); break;
+
+            // Bot
+            case 'bot-diff':
+                if (!appSettings.bot) appSettings.bot = {};
+                appSettings.bot.difficulty = parseInt(v);
+                // Bot-Spieler live aktualisieren (async, fire & forget)
+                try { State.getBotPlayers().forEach(b => { b.botDifficulty = parseInt(v); }); } catch(e) {}
+                break;
+            case 'bot-spd':
+                if (!appSettings.bot) appSettings.bot = {};
+                appSettings.bot.speed = v;
+                try { State.getBotPlayers().forEach(b => { b.botSpeed = v; }); } catch(e) {}
+                break;
         }
     },
 
@@ -693,15 +750,30 @@ export const Management = {
         const m = GAME_META[g.game] || { label: g.game, accent: '#666' };
         const date = new Date(g.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' });
         const sm = g.stats?.summary || {};
-        const win = g.stats?.isWinner;
+        const win = g.stats?.isWinner;          // true | false | null (Solo)
+        const scoreLabel = g.stats?.scoreLabel; // z.B. "3 Legs", "💎 Shanghai!", "247 Pts"
+        const isShanghaiWin = g.stats?.isShanghaiWin;
         const opps = g.settings?.opponents;
 
+        // Outcome-Tag: nur bei Multiplayer (win !== null)
+        let outcomeTag = '';
+        if (win === true) {
+            outcomeTag = `<span class="mgmt-htag" style="background:#16a34a;color:#fff;font-weight:800;">SIEG</span>`;
+        } else if (win === false) {
+            outcomeTag = `<span class="mgmt-htag" style="background:#444;color:#aaa;font-weight:700;">NIEDERLAGE</span>`;
+        }
+
+        // Score-Label-Tag (z.B. "3 Legs", "💎 Shanghai!", "247 Pts")
+        const scoreLabelTag = scoreLabel
+            ? `<span class="mgmt-htag" style="${isShanghaiWin ? 'background:#7c3aed;color:#fff;' : ''}">${scoreLabel}</span>`
+            : '';
+
         let tags = [];
-        if (sm.avg) tags.push(`Avg ${sm.avg}`);
-        if (sm.first9Avg) tags.push(`F9 ${sm.first9Avg}`);
-        if (sm.mpr) tags.push(`MPR ${sm.mpr}`);
-        if (sm.hitRate || sm.accuracy) tags.push(`${sm.hitRate || sm.accuracy}%`);
-        if (g.totalScore !== undefined) tags.push(`Score: ${g.totalScore}`);
+        if (sm.avg)                          tags.push(`Avg ${sm.avg}`);
+        if (sm.first9Avg)                    tags.push(`F9 ${sm.first9Avg}`);
+        if (sm.mpr)                          tags.push(`MPR ${sm.mpr}`);
+        if (sm.hitRate || sm.accuracy)       tags.push(`${sm.hitRate || sm.accuracy}%`);
+        if (g.totalScore !== undefined && !scoreLabel) tags.push(`Score: ${g.totalScore}`);
 
         return `
             <div class="mgmt-hcard" style="--ha: ${m.accent}; flex-shrink: 0;">
@@ -713,9 +785,9 @@ export const Management = {
                     </div>
                     ${opps?.length ? `<div class="mgmt-hcard-opp">vs. ${opps.map(o=>_esc(o)).join(', ')}</div>` : ''}
                     <div class="mgmt-hcard-tags">
+                        ${outcomeTag}
+                        ${scoreLabelTag}
                         ${tags.map(t => `<span class="mgmt-htag">${t}</span>`).join('')}
-                        ${win === true ? '<span class="mgmt-htag mgmt-htag-w">✅</span>' : ''}
-                        ${win === false ? '<span class="mgmt-htag mgmt-htag-l">❌</span>' : ''}
                     </div>
                 </div>
                 <button class="mgmt-hdel" data-idx="${g._idx}" title="Löschen">🗑</button>

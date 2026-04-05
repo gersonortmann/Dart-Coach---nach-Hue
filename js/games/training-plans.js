@@ -28,7 +28,7 @@ export const TRAINING_PLANS = [
         blocks: [
             {
                 gameId: 'checkout-challenge',
-                settings: { difficulty: 'standard', rounds: 10, doubleOut: true }
+                settings: { difficulty: 'standard', rounds: 10, doubleOut: true, turnsPerTarget: 1 }
             },
             {
                 gameId: 'bobs27',
@@ -56,14 +56,77 @@ export const TRAINING_PLANS = [
             },
             {
                 gameId: 'cricket',
-                settings: { mode: 'standard', spRounds: 20 }
+                settings: { mode: 'mark21', spRounds: 20 }
             },
             {
                 gameId: 'x01',
                 settings: { startScore: 501, mode: 'sets', bestOf: 3 }
             }
         ]
-    }
+    },
+    {
+        id: 'double-trouble',
+        label: 'Double Trouble',
+        duration: '~25 Min',
+        description: 'Alles dreht sich ums Doppel: Bob\'s 27, Checkout-Drills und ein finales 301er zum Kaltwerden.',
+        blocks: [
+            {
+                gameId: 'bobs27',
+                settings: {}
+            },
+            {
+                gameId: 'segment-master',
+                settings: { segment: 20, zone: 'double', turnLimit: 10 }
+            },
+            {
+                gameId: 'checkout-challenge',
+                settings: { difficulty: 'standard', rounds: 10, doubleOut: true, turnsPerTarget: 2 }
+            },
+            {
+                gameId: 'x01',
+                settings: { startScore: 301, mode: 'legs', bestOf: 3, doubleIn: false, doubleOut: true }
+            }
+        ]
+    },
+    {
+        id: 'the-diagnostic',
+        label: 'The Diagnostic',
+        duration: '~30 Min',
+        description: 'Ein vollständiger Querschnitt durch alle Fähigkeiten: Scoring, Doppel, Checkout, Präzision. Liefert dein persönliches Stärken-Profil.',
+        diagnostic: true,   // Marker für Radar-Chart im Result-Screen
+        blocks: [
+            {
+                // Scoring-Fähigkeit
+                gameId: 'scoring-drill',
+                settings: { dartLimit: 33 },
+                diagnosticKey: 'scoring'
+            },
+            {
+                // Doppel-Präzision
+                gameId: 'bobs27',
+                settings: {},
+                diagnosticKey: 'doubles'
+            },
+            {
+                // Checkout-Stärke
+                gameId: 'checkout-challenge',
+                settings: { difficulty: 'standard', rounds: 8, doubleOut: true, turnsPerTarget: 1 },
+                diagnosticKey: 'checkout'
+            },
+            {
+                // Segment-Präzision (Double + Triple Auswahl, Standard: Triple 20)
+                gameId: 'segment-master',
+                settings: { segment: 20, zone: 'triple', turnLimit: 10 },
+                diagnosticKey: 'precision'
+            },
+            {
+                // Matchfähigkeit – 301, 5 Runden, Double Out
+                gameId: 'x01',
+                settings: { startScore: 301, mode: 'legs', bestOf: 5, doubleIn: false, doubleOut: true },
+                diagnosticKey: 'match'
+            }
+        ]
+    },
 ];
 
 export const TrainingPlanService = {

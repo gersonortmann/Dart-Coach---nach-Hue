@@ -51,10 +51,8 @@ export const Cricket = {
             } else if (result.status === 'CLOSED') {
                 overlayText = `CLOSED ${targetVal}`; 
                 overlayType = 'cricket-closed'; 
-            } else if (pointsScored > 0) {
-                overlayText = `+${pointsScored}`; 
-                overlayType = 'standard'; 
             }
+            // Kein +Score-Overlay mehr bei Dart 1/2 – nur OPEN/CLOSE
         }
 
         // Dart speichern: points wird mit Cricket-spezifischem Wert überschrieben
@@ -115,10 +113,18 @@ export const Cricket = {
             
             // Check auf MISS: Kein Dart hat ein gültiges Target getroffen
             const anyHit = session.tempDarts.some(d => !d.isMiss && validTargets.includes(d.base));
-            
-            if (!anyHit && !overlayText) { 
-                 overlayText = "MISS"; 
-                 overlayType = 'miss'; 
+
+            // Am Rundenende: immer erspielte Punkte zeigen, nicht OPEN/CLOSE
+            const turnPoints = session.tempDarts.reduce((a, d) => a + (d.points || 0), 0);
+            if (turnPoints > 0) {
+                overlayText = String(turnPoints);
+                overlayType = 'hit';
+            } else if (!anyHit) { 
+                overlayText = "MISS"; 
+                overlayType = 'miss'; 
+            } else {
+                // Treffer ohne Punkte (nur OPEN/CLOSE) → letztes Overlay beibehalten oder leer
+                // overlayText bleibt gesetzt (z.B. "CLOSED 20" vom 3. Dart) oder null
             }
 
             return { 
@@ -136,7 +142,8 @@ export const Cricket = {
 
     // ── MARK 21 ──────────────────────────────────────────────────────────────
     // Alle 7 Felder schließen mit so wenig Darts wie möglich.
-    // Punkte = Gesamtanzahl geworfener Darts (weniger = besser).
+    // Multiplayer: jeder Spieler spielt unabhängig, kein Einfluss auf andere.
+    // Sieger = wer alle Felder mit wenigsten Darts schließt.
     _handleMark21: function(session, player, dart) {
         const validTargets = session.targets;
         const targetVal = dart.base;
@@ -145,38 +152,51 @@ export const Cricket = {
         let overlayText = null;
         let overlayType = 'score';
 
+        // Marks tracken – nur für diesen Spieler, keine Punkte, keine Gegner-Logik
         if (validTargets.includes(targetVal) && hits > 0) {
-            const result = this._processMark(session, player, targetVal, hits);
-            if (result.status === 'OPENED') {
-                overlayText = `${targetVal} ✓`;
-                overlayType = 'cricket-open';
+            const current = player.marks[targetVal] || 0;
+            if (current < 3) {
+                player.marks[targetVal] = Math.min(3, current + hits);
+                if (player.marks[targetVal] >= 3) {
+                    overlayText = `${targetVal === 25 ? 'BULL' : targetVal} ✓`;
+                    overlayType = 'cricket-open';
+                }
             }
         }
 
-        // Dart speichern (points = 0, nur Anzahl zählt)
+        // Dart speichern (points = 0, nur Dart-Anzahl zählt)
         dart._isHit = !dart.isMiss && validTargets.includes(dart.base);
         session.tempDarts.push({ ...dart, points: 0 });
 
-        // Live-Zähler für MPR (Marks pro Dart)
+        // Live-Zähler: Score = Gesamtdarts, MPR = Marks pro Dart
         const allThrown = [
             ...player.turns.flatMap(t => t.darts || []),
             ...session.tempDarts
         ];
         const totalDarts = allThrown.length;
         const totalMarks = allThrown.reduce((a, d) => {
-            return a + ((!d.isMiss && validTargets.includes(d.base)) ? (d.multiplier || 0) : 0);
+            return a + ((!d.isMiss && validTargets.includes(d.base)) ? Math.min(d.multiplier || 0, 3) : 0);
         }, 0);
         player.liveMpr = totalDarts > 0 ? ((totalMarks / totalDarts) * 3).toFixed(2) : '0.00';
-        // Score = Anzahl geworfener Darts insgesamt
-        player.currentResidual = totalDarts;
+        player.currentResidual = totalDarts; // weniger = besser
 
-        // Win: alle Felder auf 3 Marks gesetzt
+        // Dieser Spieler fertig?
         if (this._areAllClosed(player)) {
+            player.finished = true;
             this._logTurn(session, player);
-            return { action: 'WIN_MATCH', overlay: { text: 'FERTIG!', type: 'check' }, suppressModal: true };
+            // Multiplayer: prüfen ob noch andere unfertige Spieler existieren
+            const unfinished = session.players.filter(p => !p.finished);
+            if (unfinished.length === 0) {
+                return { action: 'WIN_MATCH', overlay: { text: 'FERTIG!', type: 'check' }, suppressModal: true };
+            }
+            // Noch Spieler übrig → Spieler ist fertig, nächster dran
+            return {
+                action: 'FINISH_GAME',
+                overlay: { text: 'FERTIG!', type: 'check' }
+            };
         }
 
-        // Rundenende
+        // Rundenende nach 3 Darts
         if (session.tempDarts.length >= 3) {
             this._logTurn(session, player);
             const anyHit = session.tempDarts.some(d => !d.isMiss && validTargets.includes(d.base));
@@ -259,10 +279,29 @@ export const Cricket = {
 
     handleWinLogik: function(session, player, result) {
         if (session.settings?.mode === 'mark21') {
-            const darts = player.turns.reduce((a, t) => a + (t.darts?.length || 0), 0);
+            const isSolo = session.players.length === 1;
+            if (isSolo) {
+                const darts = player.currentResidual;
+                return {
+                    isMatchOver: true,
+                    messageTitle: 'MARK 21 GESCHAFFT!',
+                    messageBody: `${player.name} hat alle Felder in ${darts} Darts geschlossen!`,
+                    nextActionText: 'STATISTIK'
+                };
+            }
+            // Multiplayer: Sieger = wenigste Darts unter den fertigen Spielern
+            const finished = session.players.filter(p => p.finished);
+            const winner = finished.reduce((best, p) =>
+                p.currentResidual < best.currentResidual ? p : best, finished[0]);
+            const lines = session.players
+                .filter(p => p.finished)
+                .sort((a, b) => a.currentResidual - b.currentResidual)
+                .map((p, i) => `${i + 1}. ${p.name}: ${p.currentResidual} Darts`)
+                .join('<br>');
             return {
-                messageTitle: 'MARK 21 GESCHAFFT!',
-                messageBody: `${player.name} hat alle Felder in ${darts} Darts geschlossen!`,
+                isMatchOver: true,
+                messageTitle: `🏆 ${winner.name} GEWINNT!`,
+                messageBody: lines,
                 nextActionText: 'STATISTIK'
             };
         }

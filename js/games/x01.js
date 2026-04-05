@@ -101,20 +101,33 @@ export const X01 = {
 
     _logTurn: function(player, session, flags) {
         const totalScore = session.tempDarts.reduce((a, b) => a + (b.points || 0), 0);
+        // legIndex: wie viele Legs hat dieser Spieler bisher abgeschlossen?
+        if (player._currentLegIndex === undefined) player._currentLegIndex = 0;
         player.turns.push({
-            roundIndex: session.roundIndex,
-            score: totalScore,
-            darts: [...session.tempDarts],
-            timestamp: Date.now(),
+            roundIndex:    session.roundIndex,
+            legIndex:      player._currentLegIndex,
+            score:         totalScore,
+            residualAfter: player.currentResidual,  // Reststand nach dieser Aufnahme
+            darts:         [...session.tempDarts],
+            timestamp:     Date.now(),
             ...flags
         });
+        // Leg abgeschlossen → Index erhöhen
+        if (flags.isLegFinish) player._currentLegIndex++;
     },
 
     _checkMatchWin: function(session, player) {
         const settings = session.settings;
-        const legsNeeded = Math.ceil(settings.bestOf / 2);
         
         player.legsWon = (player.legsWon || 0) + 1;
+
+        // 170 Checkout-Training: bestOf = exakte Rundenanzahl (nicht "Best of")
+        if (settings.startScore === 170) {
+            if (player.legsWon >= settings.bestOf) return 'WIN_MATCH';
+            return 'WIN_LEG';
+        }
+
+        const legsNeeded = Math.ceil(settings.bestOf / 2);
 
         if (settings.mode === 'sets') {
              if (player.legsWon >= 3) {
@@ -167,31 +180,90 @@ export const X01 = {
 
     handleWinLogik: function(session, player, result) {
         const opponent = session.players.find(p => p.id !== player.id);
-        const scoreDisplay = `${player.legsWon}:${opponent ? opponent.legsWon : 0}`;
         const isMatch = (result.action === 'WIN_MATCH');
+        const is170 = session.settings.startScore === 170;
+        const isSets = session.settings.mode === 'sets';
 
-        // ── Leg-Statistik für Modal ────────────────────────────────────────
+        // ── Leg-Statistik: nur aktueller Leg (legIndex des zuletzt gespielten Legs) ──
         const _legStats = (p) => {
-            const darts = p.turns.flatMap(t => t.darts || []);
-            const pts   = p.turns.reduce((a,t) => a + (t.bust ? 0 : (t.score||0)), 0);
+            // Turns des soeben beendeten Legs (legIndex erhöht sich erst durch _logTurn mit isLegFinish)
+            // Nach dem Leg: _currentLegIndex wurde um 1 erhöht, also ist der Leg bei idx-1
+            const legIdx = (p._currentLegIndex ?? 1) - 1;
+            const legTurns = p.turns.filter(t => t.legIndex === legIdx);
+            const darts = legTurns.flatMap(t => t.darts || []);
+            const pts   = legTurns.reduce((a, t) => a + (t.bust ? 0 : (t.score || 0)), 0);
             const avg   = darts.length > 0 ? ((pts / darts.length) * 3).toFixed(1) : '-';
             const f9d   = darts.slice(0, 9);
-            const f9pts = f9d.reduce((a,d) => a + (d.points||0), 0);
+            const f9pts = f9d.reduce((a, d) => a + (d.points || 0), 0);
             const f9    = f9d.length > 0 ? ((f9pts / f9d.length) * 3).toFixed(1) : '-';
             return { avg, f9 };
         };
 
+        // ── Leg-für-Leg Tabelle (alle bisherigen Legs) ─────────────────────
+        const _legTable = () => {
+            const allLegs = new Set(player.turns.map(t => t.legIndex ?? 0));
+            const legCount = Math.max(...allLegs) + 1;
+            if (legCount <= 1) return ''; // Nur sinnvoll ab 2 Legs
+
+            const _legAvg = (p, idx) => {
+                const lt   = p.turns.filter(t => (t.legIndex ?? 0) === idx);
+                const dts  = lt.flatMap(t => t.darts || []);
+                const pts  = lt.reduce((a, t) => a + (t.bust ? 0 : (t.score || 0)), 0);
+                return dts.length > 0 ? ((pts / dts.length) * 3).toFixed(1) : '-';
+            };
+            const _legF9 = (p, idx) => {
+                const lt   = p.turns.filter(t => (t.legIndex ?? 0) === idx);
+                const dts  = lt.flatMap(t => t.darts || []).slice(0, 9);
+                const pts  = dts.reduce((a, d) => a + (d.points || 0), 0);
+                return dts.length > 0 ? ((pts / dts.length) * 3).toFixed(1) : '-';
+            };
+
+            const legNums = Array.from({ length: legCount }, (_, i) => i);
+            const avgColor = (val, all) => {
+                const nums = all.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                if (nums.length < 2) return '#ccc';
+                const max = Math.max(...nums), min = Math.min(...nums);
+                const v = parseFloat(val);
+                if (isNaN(v)) return '#555';
+                if (v === max) return '#10b981';
+                if (v === min) return '#ef4444';
+                return '#ccc';
+            };
+
+            const rows = session.players.map(p => {
+                const avgs = legNums.map(i => _legAvg(p, i));
+                const f9s  = legNums.map(i => _legF9(p, i));
+                return `
+                    <tr>
+                        <td style="text-align:left;padding:3px 6px;color:#aaa;font-size:0.8rem;">${p.name}</td>
+                        ${avgs.map((v, i) => `
+                            <td style="text-align:center;padding:3px 6px;font-size:0.82rem;color:${avgColor(v, avgs)}">
+                                ${v}<br><span style="font-size:0.65rem;color:#555">f9:${f9s[i]}</span>
+                            </td>`).join('')}
+                    </tr>`;
+            }).join('');
+
+            const headers = legNums.map(i => `<th style="text-align:center;padding:2px 6px;font-size:0.7rem;color:#555">L${i+1}</th>`).join('');
+            return `
+                <table style="width:100%;margin-top:14px;border-collapse:collapse;font-size:0.82rem;border-top:1px solid #222;padding-top:8px;">
+                    <thead><tr><th style="text-align:left;padding:2px 6px;font-size:0.7rem;color:#555">Leg-AVG</th>${headers}</tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        };
+
+        // ── Aktuelle Leg-Stats Tabelle ─────────────────────────────────────
         const allPlayers = session.players;
         const statsRows = allPlayers.map(p => {
             const s = _legStats(p);
-            return `<tr style="color:${p.id===player.id?'var(--accent-color)':'#ccc'}">
+            const isWinner = p.id === player.id;
+            return `<tr style="color:${isWinner ? 'var(--accent-color)' : '#ccc'}">
                 <td style="text-align:left;padding:4px 8px;">${p.name}</td>
                 <td style="padding:4px 12px;">${s.avg}</td>
                 <td style="padding:4px 8px;">${s.f9}</td>
             </tr>`;
         }).join('');
 
-        const statsTable = allPlayers.length > 0 ? `
+        const statsTable = `
             <table style="width:100%;margin-top:12px;border-collapse:collapse;font-size:0.9rem;">
                 <thead><tr style="color:#555;font-size:0.75rem;">
                     <th style="text-align:left;padding:2px 8px;"></th>
@@ -199,16 +271,36 @@ export const X01 = {
                     <th style="padding:2px 8px;">F9</th>
                 </tr></thead>
                 <tbody>${statsRows}</tbody>
-            </table>` : '';
-        
-        if (session.settings.mode === 'sets') {
-             const setScore = `${player.setsWon}:${opponent ? opponent.setsWon : 0}`;
-             if (isMatch) {
-                 return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${setScore} Sätze!${statsTable}`, nextActionText: "STATISTIK" };
-             }
-             return { messageTitle: "SATZ / LEG", messageBody: `Stand: ${setScore} Sätze (${scoreDisplay} Legs)${statsTable}`, nextActionText: "WEITER" };
+            </table>
+            ${_legTable()}`;
+
+        // ── 170 Checkout-Training ─────────────────────────────────────────
+        if (is170) {
+            if (isMatch) {
+                return {
+                    messageTitle: "TRAINING BEENDET!",
+                    messageBody: `${player.name} checkt ${player.legsWon}× in ${session.settings.bestOf} Runden.${statsTable}`,
+                    nextActionText: "STATISTIK"
+                };
+            }
+            return {
+                messageTitle: "CHECK!",
+                messageBody: `Runde ${player.legsWon} von ${session.settings.bestOf}${statsTable}`,
+                nextActionText: "NÄCHSTE RUNDE"
+            };
         }
-        
+
+        // ── Standard X01 ──────────────────────────────────────────────────
+        const scoreDisplay = `${player.legsWon}:${opponent ? opponent.legsWon : 0}`;
+
+        if (isSets) {
+            const setScore = `${player.setsWon}:${opponent ? opponent.setsWon : 0}`;
+            if (isMatch) {
+                return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${setScore} Sätze!${statsTable}`, nextActionText: "STATISTIK" };
+            }
+            return { messageTitle: "SATZ / LEG", messageBody: `Stand: ${setScore} Sätze (${scoreDisplay} Legs)${statsTable}`, nextActionText: "WEITER" };
+        }
+
         if (isMatch) {
             return { messageTitle: "MATCH GEWONNEN!", messageBody: `🏆 ${player.name} gewinnt ${scoreDisplay}!${statsTable}`, nextActionText: "STATISTIK" };
         }
@@ -219,65 +311,80 @@ export const X01 = {
      * Step 7a: Heatmap nutzt jetzt dart.segment statt dart.val
      */
     getResultData: function(session, player) {
-         const turnScores = player.turns.map(t => t.score || 0);
-         const totalPoints = turnScores.reduce((a,b) => a+b, 0);
-         const totalDarts = player.turns.flatMap(t => t.darts || []).length;
-         
+         const allDarts  = player.turns.flatMap(t => t.darts || []);
+         const totalPoints = player.turns.reduce((a, t) => a + (t.bust ? 0 : (t.score || 0)), 0);
+         const totalDarts  = allDarts.length;
          const avg = totalDarts > 0 ? ((totalPoints / totalDarts) * 3).toFixed(1) : "0.0";
-         
-         const allDarts = player.turns.flatMap(t => t.darts || []);
-         const f9Darts = allDarts.slice(0, 9);
-         const f9Sum = f9Darts.reduce((a, b) => a + (b.points || 0), 0);
-         const f9Avg = f9Darts.length > 0 ? ((f9Sum / f9Darts.length) * 3).toFixed(1) : "-";
- 
+
+         // F9 pro Leg berechnen, dann Durchschnitt über alle Legs
+         const legIndices = [...new Set(player.turns.map(t => t.legIndex ?? 0))];
+         const legF9s = legIndices.map(li => {
+             const lt   = player.turns.filter(t => (t.legIndex ?? 0) === li);
+             const dts  = lt.flatMap(t => t.darts || []).slice(0, 9);
+             const pts  = dts.reduce((a, d) => a + (d.points || 0), 0);
+             return dts.length > 0 ? (pts / dts.length) * 3 : null;
+         }).filter(v => v !== null);
+         const f9Avg = legF9s.length > 0
+             ? (legF9s.reduce((a, v) => a + v, 0) / legF9s.length).toFixed(1)
+             : "-";
+
+         // Leg-für-Leg Breakdown
+         const legBreakdown = legIndices.map(li => {
+             const lt   = player.turns.filter(t => (t.legIndex ?? 0) === li);
+             const dts  = lt.flatMap(t => t.darts || []);
+             const pts  = lt.reduce((a, t) => a + (t.bust ? 0 : (t.score || 0)), 0);
+             const legAvg = dts.length > 0 ? ((pts / dts.length) * 3).toFixed(1) : '-';
+             const f9d  = dts.slice(0, 9);
+             const f9pts = f9d.reduce((a, d) => a + (d.points || 0), 0);
+             const legF9 = f9d.length > 0 ? ((f9pts / f9d.length) * 3).toFixed(1) : '-';
+             const isWon = lt.some(t => t.isLegFinish);
+             return { legIndex: li, avg: legAvg, f9: legF9, darts: dts.length, isWon };
+         });
+
          let bestLegDarts = Infinity;
          let bestCheckout = 0;
          let currentLegDarts = 0;
-         
          player.turns.forEach((t, idx) => {
              currentLegDarts += (t.darts ? t.darts.length : 3);
-             if(t.isLegFinish) {
-                 if(currentLegDarts < bestLegDarts) bestLegDarts = currentLegDarts;
-                 if(t.score > bestCheckout) bestCheckout = t.score;
+             if (t.isLegFinish) {
+                 if (currentLegDarts < bestLegDarts) bestLegDarts = currentLegDarts;
+                 if (t.score > bestCheckout) bestCheckout = t.score;
                  currentLegDarts = 0;
              } else {
-                  const next = player.turns[idx+1];
-                  if(next && next.roundIndex < t.roundIndex) currentLegDarts = 0;
+                 const next = player.turns[idx + 1];
+                 if (next && next.roundIndex < t.roundIndex) currentLegDarts = 0;
              }
          });
-         
+
          let c100 = 0, c140 = 0, c180 = 0;
-         turnScores.forEach(s => {
-             if(s === 180) c180++;
-             else if(s >= 140) c140++;
-             else if(s >= 100) c100++;
+         player.turns.forEach(t => {
+             const s = t.bust ? 0 : (t.score || 0);
+             if (s === 180) c180++;
+             else if (s >= 140) c140++;
+             else if (s >= 100) c100++;
          });
- 
-         // Step 7a: Einheitliche Heatmap über dart.segment
+
          const heatmap = {};
          allDarts.forEach(d => {
-             if (!d.isMiss && d.segment) {
-                 heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
-             }
+             if (!d.isMiss && d.segment) heatmap[d.segment] = (heatmap[d.segment] || 0) + 1;
          });
- 
-         const chartData = {
-             labels: turnScores.map((_, i) => i + 1),
-             values: turnScores
-         };
- 
+
+         const turnScores = player.turns.map(t => t.bust ? 0 : (t.score || 0));
+         const chartData = { labels: turnScores.map((_, i) => i + 1), values: turnScores };
+
          return {
-             summary: { 
-                 avg: avg, 
-                 first9: f9Avg, 
-                 bestLeg: bestLegDarts === Infinity ? '-' : bestLegDarts, 
+             summary: {
+                 avg,
+                 first9: f9Avg,
+                 bestLeg: bestLegDarts === Infinity ? '-' : bestLegDarts,
                  checkout: bestCheckout || '-',
                  totalScore: totalPoints,
-                 totalDarts: totalDarts
+                 totalDarts,
              },
+             legBreakdown,
              powerScores: { ton: c100, ton40: c140, max: c180 },
-             heatmap: heatmap,
-             chart: chartData
+             heatmap,
+             chart: chartData,
          };
      },
  

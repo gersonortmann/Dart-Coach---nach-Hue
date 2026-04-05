@@ -161,7 +161,7 @@
 
 @media (min-width: 640px) {
     .dash-match-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr;
     }
 }
 
@@ -606,3 +606,147 @@
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ─── DIAGNOSTIC PROFILE CARD ───────────────────────────────── */
+
+.diag-profile-card {
+    background: linear-gradient(135deg, rgba(234,179,8,0.06) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(234,179,8,0.25);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+/* Klickbarer Header – immer sichtbar */
+.diag-acc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+}
+.diag-acc-header:hover { background: rgba(234,179,8,0.04); }
+
+.diag-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.diag-acc-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.diag-header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+/* Pfeil dreht sich beim Öffnen */
+.diag-profile-card .dash-acc-arrow {
+    transition: transform 0.2s;
+    color: #555;
+    font-size: 0.75rem;
+}
+.diag-profile-card.open .dash-acc-arrow {
+    transform: rotate(180deg);
+}
+
+/* Inhalt: standardmäßig zugeklappt */
+.diag-acc-content {
+    display: none;
+    padding: 0 20px 20px;
+    border-top: 1px solid rgba(234,179,8,0.12);
+}
+.diag-profile-card.open .diag-acc-content {
+    display: block;
+}
+
+.diag-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #eab308;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.diag-subtitle { font-size: 0.78rem; color: #555; }
+
+.diag-overall {
+    font-size: 2rem;
+    font-weight: 900;
+    line-height: 1;
+}
+.diag-overall-sub { font-size: 0.8rem; color: #555; font-weight: 400; }
+
+.diag-body {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 24px;
+    align-items: center;
+    padding-top: 16px;
+}
+@media (max-width: 640px) {
+    .diag-body { grid-template-columns: 1fr; }
+    .diag-radar-canvas { margin: 0 auto; display: block; }
+}
+
+.diag-radar-canvas { width: 200px; height: 200px; flex-shrink: 0; }
+
+.diag-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.diag-bar-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 32px 48px;
+    align-items: center;
+    gap: 8px;
+}
+
+.diag-bar-label {
+    font-size: 0.8rem;
+    color: #aaa;
+    white-space: nowrap;
+}
+
+.diag-bar-track {
+    height: 8px;
+    background: #222;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.diag-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s ease;
+}
+
+.diag-bar-val {
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: right;
+}
+
+.diag-bar-hint {
+    font-size: 0.7rem;
+    color: #444;
+}
+
+.diag-footer {
+    font-size: 0.75rem;
+    color: #444;
+    text-align: center;
+    border-top: 1px solid #1e1e1e;
+    padding-top: 10px;
+}
+.diag-footer strong { color: #666; }

@@ -336,3 +336,202 @@ button {
     background: none; border: none; color: var(--gray-300); font-size: 1.2rem; cursor: pointer; padding: 5px;
 }
 .btn-delete-icon:hover { color: var(--miss-color); transform: scale(1.1); }
+/* ─── STATS TREND CARD ───────────────────────────────────────── */
+.stats-trend-card {
+    background: rgba(234,179,8,0.05);
+    border: 1px solid rgba(234,179,8,0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin: 8px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.stc-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #eab308;
+    text-transform: uppercase;
+}
+.stc-count {
+    font-weight: 400;
+    color: #666;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 6px;
+}
+.stc-value {
+    font-size: 1.6rem;
+    font-weight: 900;
+    line-height: 1;
+}
+.stc-delta {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: #666;
+    margin-left: 4px;
+}
+.stc-hint {
+    font-size: 0.7rem;
+    color: #444;
+    margin-top: 2px;
+}
+
+/* ─── PRE-GAME MODAL ─────────────────────────────────────────── */
+
+/* Größeres Modal für Pre-Game */
+.pregame-overlay .pregame-content {
+    max-width: 640px !important;
+    width: 95% !important;
+    padding: 0 !important;
+    overflow: hidden;
+    border: 1px solid rgba(255,193,7,0.25) !important;
+    box-shadow: 0 0 60px rgba(255,193,7,0.08), 0 20px 60px rgba(0,0,0,0.85) !important;
+    align-items: stretch !important;
+    text-align: left !important;
+}
+
+/* Goldener Akzentstreifen oben */
+.pgm-header-accent {
+    height: 4px;
+    background: linear-gradient(90deg, #eab308, #f59e0b, #ffc107, #eab308);
+    background-size: 200%;
+    animation: pgm-shine 3s linear infinite;
+}
+@keyframes pgm-shine {
+    0%   { background-position: 0%; }
+    100% { background-position: 200%; }
+}
+
+.pgm-header {
+    background: linear-gradient(135deg, rgba(234,179,8,0.08) 0%, rgba(255,255,255,0.02) 100%);
+    border-bottom: 1px solid rgba(234,179,8,0.15);
+}
+
+.pgm-header-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px 16px;
+}
+
+.pgm-header-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 12px rgba(234,179,8,0.4));
+}
+
+.pgm-header-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: #eab308;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.pgm-header-game {
+    font-family: 'Permanent Marker', cursive;
+    font-size: 1.6rem;
+    color: var(--text-main);
+    line-height: 1;
+}
+
+/* Body */
+.pgm-body {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Spieler-Vergleichstabelle */
+.pgm-table-wrap {
+    overflow-x: auto;
+}
+.pgm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.pgm-th-row { border-bottom: 1px solid #2a2a2a; }
+.pgm-th {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #666;
+    text-transform: uppercase;
+    text-align: center;
+}
+.pgm-th-name { text-align: left; }
+.pgm-td-row {
+    border-bottom: 1px solid #1a1a1a;
+    transition: background 0.15s;
+}
+.pgm-td-row:last-child { border-bottom: none; }
+.pgm-td-row:hover { background: rgba(255,255,255,0.03); }
+.pgm-td {
+    padding: 12px 14px;
+    text-align: center;
+    vertical-align: middle;
+}
+.pgm-td-name {
+    text-align: left;
+    font-weight: 700;
+    color: var(--text-main);
+    font-size: 1rem;
+    white-space: nowrap;
+}
+.pgm-td-val {
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #ccc;
+    font-variant-numeric: tabular-nums;
+}
+.pgm-td-last {
+    color: #ccc;
+    font-size: 0.9rem;
+}
+.pgm-gold { color: #eab308 !important; }
+
+/* Regeln */
+.pgm-rules {
+    border-top: 1px solid #1e1e1e;
+    padding-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.pgm-rules-title {
+    font-size: 0.72rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    width: 100%;
+    margin-bottom: 2px;
+}
+.pgm-rule {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.85rem;
+    color: #a5b4fc;
+    font-weight: 500;
+}
+
+/* Footer mit Buttons */
+.pgm-footer {
+    display: flex;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid #1e1e1e;
+    background: rgba(0,0,0,0.2);
+}
+.pgm-btn-back  { flex: 0 0 auto; min-width: 100px; }
+.pgm-btn-start { flex: 1; font-size: 1.1rem; letter-spacing: 0.08em; }
